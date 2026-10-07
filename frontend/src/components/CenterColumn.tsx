@@ -38,11 +38,12 @@ export const CenterColumn: React.FC = () => {
                 onChange={(e) => setHandStyle(e.target.value as any)}
                 className="bg-[#121418] text-xs font-mono text-cyber-cyan font-bold px-3 py-1 rounded-xl border border-cyber-border focus:border-cyber-cyan focus:outline-none cursor-pointer"
               >
+                <option value="wireframe">🔥 CYBER WIREFRAME (Studio Hand)</option>
                 <option value="particles">✨ QUANTUM PARTICLES (GLOVETONE v1.0)</option>
                 <option value="hybrid">⚡ CYBER HYBRID (Particles + Mesh)</option>
-                <option value="wireframe">🌐 HOLOGRAPHIC WIREFRAME</option>
-                <option value="triangulated">📐 LOW-POLY TRIANGULATED WIREFRAME</option>
+                <option value="anatomical">🧬 ANATOMICAL SCULPT (Human Form)</option>
                 <option value="solid">🛡️ SOLID CYBER CHASSIS</option>
+                <option value="triangulated">📐 LOW-POLY TRIANGULATED</option>
               </select>
             </div>
 
@@ -129,7 +130,7 @@ export const CenterColumn: React.FC = () => {
 
       {/* ---------------- 3D CANVAS VIEWPORT ---------------- */}
       <div className="relative flex-1 min-h-[460px] w-full">
-        <Hand3D viewMode={viewMode} />
+        <Hand3D viewMode={viewMode} handStyle={handStyle} />
 
         {/* Floating Dual Telemetry HUD Overlays */}
         {/* Left Side Overlay (LH in dual mode, or single hand) */}

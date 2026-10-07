@@ -21,11 +21,13 @@ const defaultGloveState = (): GloveState => ({
   lastUpdated: 0,
 });
 
+export type HandStyleType = 'particles' | 'anatomical' | 'hybrid' | 'wireframe' | 'triangulated' | 'solid';
+
 interface GloveStore {
   wsConnected: boolean;
   activeSide: 'rh' | 'lh';
   viewMode: 'rh' | 'lh' | 'both';
-  handStyle: 'triangulated' | 'hybrid' | 'particles' | 'wireframe' | 'solid';
+  handStyle: HandStyleType;
   rh: GloveState;
   lh: GloveState;
   settings: GloveSettings;
@@ -41,7 +43,7 @@ interface GloveStore {
   send: (msg: any) => void;
   setActiveSide: (side: 'rh' | 'lh') => void;
   setViewMode: (mode: 'rh' | 'lh' | 'both') => void;
-  setHandStyle: (style: 'triangulated' | 'hybrid' | 'particles' | 'wireframe' | 'solid') => void;
+  setHandStyle: (style: 'triangulated' | 'hybrid' | 'particles' | 'wireframe' | 'solid' | 'anatomical') => void;
   updateSetting: (key: keyof GloveSettings, value: number) => void;
   triggerTestNote: (note: number) => void;
   connectGlove: (side: 'rh' | 'lh', mode: string, port: string | number) => void;
@@ -62,7 +64,7 @@ export const useGloveStore = create<GloveStore>((set, get) => ({
   wsConnected: false,
   activeSide: 'rh',
   viewMode: 'both',
-  handStyle: 'particles',
+  handStyle: 'wireframe',
   rh: defaultGloveState(),
   lh: defaultGloveState(),
   settings: {
@@ -293,7 +295,7 @@ export const useGloveStore = create<GloveStore>((set, get) => ({
 
   setActiveSide: (side: 'rh' | 'lh') => set({ activeSide: side }),
   setViewMode: (mode: 'rh' | 'lh' | 'both') => set({ viewMode: mode }),
-  setHandStyle: (style: 'triangulated' | 'hybrid' | 'particles' | 'wireframe' | 'solid') => set({ handStyle: style }),
+  setHandStyle: (style: HandStyleType) => set({ handStyle: style }),
 
   updateSetting: (key: keyof GloveSettings, value: number) => {
     set((state) => ({

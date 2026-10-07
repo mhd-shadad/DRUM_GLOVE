@@ -122,26 +122,385 @@ const createAnatomicalFingertipParticleGeometry = (
   return geo;
 };
 
-// Anatomical Human Finger Segment Component (Pure Holographic Quantum Particles)
-interface QuantumFingerSegmentProps {
+// Helper to create pure quad-wireframe line geometry (concentric cross-rings + longitudinal ribs, NO diagonal triangle slashes)
+const createQuadCylinderLinesGeometry = (
+  radiusTop: number,
+  radiusBottom: number,
+  length: number,
+  radialSegments: number = 14,
+  heightSegments: number = 6,
+  isTip: boolean = false
+) => {
+  const linePositions: number[] = [];
+  const ovalZ = 0.86;
+
+  // 1. Horizontal cross rings
+  for (let h = 0; h <= heightSegments; h++) {
+    const yRatio = h / heightSegments;
+    const y = yRatio * length;
+    const r = radiusBottom + (radiusTop - radiusBottom) * yRatio;
+
+    for (let k = 0; k < radialSegments; k++) {
+      const th1 = (k / radialSegments) * Math.PI * 2;
+      const th2 = ((k + 1) / radialSegments) * Math.PI * 2;
+
+      linePositions.push(
+        r * Math.cos(th1), y, r * Math.sin(th1) * ovalZ,
+        r * Math.cos(th2), y, r * Math.sin(th2) * ovalZ
+      );
+    }
+  }
+
+  // 2. Longitudinal vertical ribs
+  for (let k = 0; k < radialSegments; k++) {
+    const th = (k / radialSegments) * Math.PI * 2;
+    const cosTh = Math.cos(th);
+    const sinTh = Math.sin(th) * ovalZ;
+
+    for (let h = 0; h < heightSegments; h++) {
+      const y1 = (h / heightSegments) * length;
+      const r1 = radiusBottom + (radiusTop - radiusBottom) * (h / heightSegments);
+      const y2 = ((h + 1) / heightSegments) * length;
+      const r2 = radiusBottom + (radiusTop - radiusBottom) * ((h + 1) / heightSegments);
+
+      linePositions.push(
+        r1 * cosTh, y1, r1 * sinTh,
+        r2 * cosTh, y2, r2 * sinTh
+      );
+    }
+  }
+
+  // 3. Fingertip Anatomical Dome (converging quad rings and ribs to the tip apex)
+  if (isTip) {
+    const domeHeight = radiusTop * 0.92;
+    const domeRings = 4;
+
+    for (let d = 1; d <= domeRings; d++) {
+      const phi = (d / domeRings) * (Math.PI / 2);
+      const y = length + domeHeight * Math.sin(phi);
+      const r = radiusTop * Math.cos(phi);
+
+      if (d < domeRings) {
+        for (let k = 0; k < radialSegments; k++) {
+          const th1 = (k / radialSegments) * Math.PI * 2;
+          const th2 = ((k + 1) / radialSegments) * Math.PI * 2;
+
+          linePositions.push(
+            r * Math.cos(th1), y, r * Math.sin(th1) * ovalZ,
+            r * Math.cos(th2), y, r * Math.sin(th2) * ovalZ
+          );
+        }
+      }
+
+      const prevPhi = ((d - 1) / domeRings) * (Math.PI / 2);
+      const yPrev = length + domeHeight * Math.sin(prevPhi);
+      const rPrev = radiusTop * Math.cos(prevPhi);
+
+      for (let k = 0; k < radialSegments; k++) {
+        const th = (k / radialSegments) * Math.PI * 2;
+        const cosTh = Math.cos(th);
+        const sinTh = Math.sin(th) * ovalZ;
+
+        linePositions.push(
+          rPrev * cosTh, yPrev, rPrev * sinTh,
+          r * cosTh, y, r * sinTh
+        );
+      }
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+  return geo;
+};
+
+// Helper to create pure quad-wireframe sphere line geometry for knuckles and muscle mounds
+const createQuadSphereLinesGeometry = (
+  radius: number,
+  radialSegments: number = 14,
+  heightSegments: number = 8
+) => {
+  const linePositions: number[] = [];
+
+  // Latitude rings
+  for (let h = 1; h < heightSegments; h++) {
+    const phi = (h / heightSegments) * Math.PI;
+    const y = radius * Math.cos(phi);
+    const r = radius * Math.sin(phi);
+
+    for (let k = 0; k < radialSegments; k++) {
+      const th1 = (k / radialSegments) * Math.PI * 2;
+      const th2 = ((k + 1) / radialSegments) * Math.PI * 2;
+
+      linePositions.push(
+        r * Math.cos(th1), y, r * Math.sin(th1),
+        r * Math.cos(th2), y, r * Math.sin(th2)
+      );
+    }
+  }
+
+  // Longitude meridians
+  for (let k = 0; k < radialSegments; k++) {
+    const th = (k / radialSegments) * Math.PI * 2;
+    const cosTh = Math.cos(th);
+    const sinTh = Math.sin(th);
+
+    for (let h = 0; h < heightSegments; h++) {
+      const phi1 = (h / heightSegments) * Math.PI;
+      const phi2 = ((h + 1) / heightSegments) * Math.PI;
+
+      const y1 = radius * Math.cos(phi1);
+      const r1 = radius * Math.sin(phi1);
+      const y2 = radius * Math.cos(phi2);
+      const r2 = radius * Math.sin(phi2);
+
+      linePositions.push(
+        r1 * cosTh, y1, r1 * sinTh,
+        r2 * cosTh, y2, r2 * sinTh
+      );
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+  return geo;
+};
+
+// Helper to create pure quad-wireframe box line geometry for palm chassis
+const createQuadBoxLinesGeometry = (
+  width: number,
+  height: number,
+  depth: number,
+  segX: number = 8,
+  segY: number = 10,
+  segZ: number = 3
+) => {
+  const linePositions: number[] = [];
+  const hx = width / 2;
+  const hy = height / 2;
+  const hz = depth / 2;
+
+  // Front & Back faces (Z = +hz and Z = -hz)
+  for (const z of [hz, -hz]) {
+    for (let j = 0; j <= segY; j++) {
+      const y = -hy + (j / segY) * height;
+      for (let i = 0; i < segX; i++) {
+        const x1 = -hx + (i / segX) * width;
+        const x2 = -hx + ((i + 1) / segX) * width;
+        linePositions.push(x1, y, z, x2, y, z);
+      }
+    }
+    for (let i = 0; i <= segX; i++) {
+      const x = -hx + (i / segX) * width;
+      for (let j = 0; j < segY; j++) {
+        const y1 = -hy + (j / segY) * height;
+        const y2 = -hy + ((j + 1) / segY) * height;
+        linePositions.push(x, y1, z, x, y2, z);
+      }
+    }
+  }
+
+  // Left & Right faces (X = -hx and X = +hx)
+  for (const x of [-hx, hx]) {
+    for (let j = 0; j <= segY; j++) {
+      const y = -hy + (j / segY) * height;
+      for (let k = 0; k < segZ; k++) {
+        const z1 = -hz + (k / segZ) * depth;
+        const z2 = -hz + ((k + 1) / segZ) * depth;
+        linePositions.push(x, y, z1, x, y, z2);
+      }
+    }
+    for (let k = 0; k <= segZ; k++) {
+      const z = -hz + (k / segZ) * depth;
+      for (let j = 0; j < segY; j++) {
+        const y1 = -hy + (j / segY) * height;
+        const y2 = -hy + ((j + 1) / segY) * height;
+        linePositions.push(x, y1, z, x, y2, z);
+      }
+    }
+  }
+
+  // Top & Bottom faces (Y = -hy and Y = +hy)
+  for (const y of [-hy, hy]) {
+    for (let i = 0; i <= segX; i++) {
+      const x = -hx + (i / segX) * width;
+      for (let k = 0; k < segZ; k++) {
+        const z1 = -hz + (k / segZ) * depth;
+        const z2 = -hz + ((k + 1) / segZ) * depth;
+        linePositions.push(x, y, z1, x, y, z2);
+      }
+    }
+    for (let k = 0; k <= segZ; k++) {
+      const z = -hz + (k / segZ) * depth;
+      for (let i = 0; i < segX; i++) {
+        const x1 = -hx + (i / segX) * width;
+        const x2 = -hx + ((i + 1) / segX) * width;
+        linePositions.push(x1, y, z, x2, y, z);
+      }
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+  return geo;
+};
+
+// Continuous sculpted anatomical human forearm and palm surface with pure quad wireframe lines and solid occluder
+const createAnatomicalArmAndPalmGeometry = (sideX: number) => {
+  const linePositions: number[] = [];
+  const vertices: number[] = [];
+  const indices: number[] = [];
+
+  const Ny = 22; // 22 height rings from forearm base through wrist up to knuckle arch
+  const Ntheta = 22; // 22 longitudinal ribs around the perimeter
+
+  const grid: [number, number, number][][] = [];
+
+  for (let j = 0; j <= Ny; j++) {
+    const t = j / Ny;
+    const ring: [number, number, number][] = [];
+
+    // Height y: from forearm base (-2.2) to knuckle arch (+0.82)
+    const y = -2.2 + t * 3.02;
+
+    if (t <= 0.48) {
+      // 1. Forearm section: from y = -2.2 tapering smoothly to wrist at y = -0.75
+      const s = t / 0.48;
+      const Rx = 0.82 - 0.24 * s; // 0.82 at base -> 0.58 at wrist
+      const Rz = 0.64 - 0.20 * s; // 0.64 at base -> 0.44 at wrist
+
+      for (let k = 0; k < Ntheta; k++) {
+        const theta = (k / Ntheta) * Math.PI * 2;
+        const x = Rx * Math.cos(theta);
+        const z = Rz * Math.sin(theta);
+        ring.push([x, y, z]);
+      }
+    } else {
+      // 2. Sculpted human palm section: from wrist at y = -0.75 up to knuckle arch at y = +0.82
+      const p = (t - 0.48) / 0.52; // 0 at wrist, 1 at knuckle arch
+      const Rx = 0.58 + 0.16 * p; // expands from 0.58 to 0.74 (total width across knuckles ~1.48)
+      const Rz = 0.44 - 0.16 * p; // tapers thickness from 0.44 down to 0.28
+
+      for (let k = 0; k < Ntheta; k++) {
+        const theta = (k / Ntheta) * Math.PI * 2;
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+
+        let x = Rx * cosT;
+        let z = Rz * sinT;
+        let curY = y;
+
+        // Thenar muscle pad swelling (thumb base fleshy mount on thumb side)
+        const isThumbSide = sideX * cosT < 0;
+        if (isThumbSide && sinT > -0.3) {
+          const thenarProfile = Math.exp(-Math.pow((p - 0.32) / 0.22, 2));
+          const weight = Math.abs(cosT) * Math.max(0, sinT + 0.4) / 1.4;
+          x -= sideX * 0.34 * thenarProfile * weight;
+          z += 0.15 * thenarProfile * weight;
+        }
+
+        // Hypothenar muscle contour (pinky edge heel)
+        const isPinkySide = sideX * cosT > 0;
+        if (isPinkySide && sinT > -0.2) {
+          const hypoProfile = Math.exp(-Math.pow((p - 0.26) / 0.18, 2));
+          const weight = Math.abs(cosT) * Math.max(0, sinT + 0.3) / 1.3;
+          x += sideX * 0.14 * hypoProfile * weight;
+          z += 0.08 * hypoProfile * weight;
+        }
+
+        // Palmar hollow cup (anterior palm hollow)
+        if (sinT > 0 && Math.abs(cosT) < 0.6) {
+          const cupProfile = Math.sin(p * Math.PI);
+          z -= 0.06 * cupProfile * (1 - Math.abs(cosT));
+        }
+
+        // Knuckle arch at the top edge
+        if (p > 0.7) {
+          const archWeight = (p - 0.7) / 0.3;
+          const archOffset = 0.08 * Math.cos((x / 0.75) * (Math.PI / 2.2));
+          curY += archOffset * archWeight;
+        }
+
+        ring.push([x, curY, z]);
+      }
+    }
+
+    grid.push(ring);
+  }
+
+  // Pure Quad LineSegments: circumferential rings + longitudinal ribs
+  for (let j = 0; j <= Ny; j++) {
+    for (let k = 0; k < Ntheta; k++) {
+      const p1 = grid[j][k];
+      const p2 = grid[j][(k + 1) % Ntheta];
+      linePositions.push(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2]);
+    }
+  }
+
+  for (let k = 0; k < Ntheta; k++) {
+    for (let j = 0; j < Ny; j++) {
+      const p1 = grid[j][k];
+      const p2 = grid[j + 1][k];
+      linePositions.push(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2]);
+    }
+  }
+
+  // Solid Inner Occluder Geometry: slightly inset (0.985) so backside lines are occluded
+  for (let j = 0; j <= Ny; j++) {
+    for (let k = 0; k < Ntheta; k++) {
+      const p = grid[j][k];
+      vertices.push(p[0] * 0.985, p[1], p[2] * 0.985);
+    }
+  }
+
+  for (let j = 0; j < Ny; j++) {
+    for (let k = 0; k < Ntheta; k++) {
+      const i0 = j * Ntheta + k;
+      const i1 = j * Ntheta + ((k + 1) % Ntheta);
+      const i2 = (j + 1) * Ntheta + ((k + 1) % Ntheta);
+      const i3 = (j + 1) * Ntheta + k;
+
+      indices.push(i0, i1, i2);
+      indices.push(i0, i2, i3);
+    }
+  }
+
+  const linesGeo = new THREE.BufferGeometry();
+  linesGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+
+  const solidGeo = new THREE.BufferGeometry();
+  solidGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  solidGeo.setIndex(indices);
+  solidGeo.computeVertexNormals();
+
+  return { linesGeo, solidGeo };
+};
+
+type HandStyleType = 'particles' | 'anatomical' | 'hybrid' | 'wireframe' | 'triangulated' | 'solid';
+
+// Anatomical Human Finger Segment Component supporting all 5 Cyber styles
+interface FingerSegmentProps {
   length: number;
   radiusBase: number;
   radiusTip: number;
   isHit: boolean;
   glowColor?: string;
   isTip?: boolean;
+  handStyle?: HandStyleType;
   children?: React.ReactNode;
 }
 
-const QuantumFingerSegment: React.FC<QuantumFingerSegmentProps> = ({
+const FingerSegment: React.FC<FingerSegmentProps> = ({
   length,
   radiusBase,
   radiusTip,
   isHit,
   glowColor = '#00f0ff',
   isTip = false,
+  handStyle = 'particles',
   children,
 }) => {
+  // Quantum particle geometries (used by 'particles' and 'hybrid')
   const particleGeo = useMemo(
     () =>
       isTip
@@ -154,33 +513,320 @@ const QuantumFingerSegment: React.FC<QuantumFingerSegmentProps> = ({
     [radiusBase]
   );
 
+  // Memoized pure quad-line geometries for Studio Cyber Wireframe
+  const quadLinesGeo = useMemo(
+    () => createQuadCylinderLinesGeometry(radiusTip, radiusBase, length, 16, 6, isTip),
+    [radiusTip, radiusBase, length, isTip]
+  );
+  const knuckleQuadLinesGeo = useMemo(
+    () => createQuadSphereLinesGeometry(radiusBase * 1.15, 16, 8),
+    [radiusBase]
+  );
+
+  // Studio Cyber Wireframe Color: Electric Amber (#ff9000), White-hot radiant flash (#ffffff) on hit
+  const studioWireColor = isHit ? '#ffffff' : (glowColor === '#00f0ff' ? '#ff9000' : '#ffa022');
   const particleColor = isHit ? '#ffeedd' : glowColor;
+  const solidColor = isHit ? '#ffeedd' : '#181d26';
+  const emissiveColor = isHit ? '#ffb46b' : glowColor;
 
   return (
     <group>
-      {/* Phalanx Bone Quantum Particle Cloud */}
-      <points geometry={particleGeo}>
-        <pointsMaterial
-          size={isHit ? 0.052 : 0.044}
-          color={particleColor}
-          transparent={true}
-          opacity={isHit ? 1.0 : 0.9}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </points>
+      {/* ---------------- 1. PARTICLES STYLE ---------------- */}
+      {(handStyle === 'particles' || handStyle === 'hybrid') && (
+        <>
+          <points geometry={particleGeo}>
+            <pointsMaterial
+              size={isHit ? 0.052 : 0.044}
+              color={particleColor}
+              transparent={true}
+              opacity={isHit ? 1.0 : (handStyle === 'hybrid' ? 0.8 : 0.9)}
+              blending={THREE.AdditiveBlending}
+              depthWrite={false}
+            />
+          </points>
 
-      {/* Joint Knuckle Particle Cloud */}
-      <points geometry={knuckleParticleGeo} position={[0, 0, 0]}>
-        <pointsMaterial
-          size={isHit ? 0.055 : 0.046}
-          color={particleColor}
-          transparent={true}
-          opacity={isHit ? 1.0 : 0.95}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </points>
+          <points geometry={knuckleParticleGeo} position={[0, 0, 0]}>
+            <pointsMaterial
+              size={isHit ? 0.055 : 0.046}
+              color={particleColor}
+              transparent={true}
+              opacity={isHit ? 1.0 : (handStyle === 'hybrid' ? 0.85 : 0.95)}
+              blending={THREE.AdditiveBlending}
+              depthWrite={false}
+            />
+          </points>
+        </>
+      )}
+
+      {/* ---------------- 2. HYBRID INNER CORE SKELETON ---------------- */}
+      {handStyle === 'hybrid' && (
+        <group>
+          <mesh position={[0, length / 2, 0]}>
+            <cylinderGeometry args={[radiusTip * 0.8, radiusBase * 0.8, length, 12]} />
+            <meshBasicMaterial
+              color={particleColor}
+              wireframe={true}
+              transparent={true}
+              opacity={0.35}
+              depthWrite={false}
+            />
+          </mesh>
+
+          <mesh position={[0, 0, 0]}>
+            <sphereGeometry args={[radiusBase * 0.9, 10, 10]} />
+            <meshBasicMaterial
+              color={particleColor}
+              wireframe={true}
+              transparent={true}
+              opacity={0.4}
+              depthWrite={false}
+            />
+          </mesh>
+
+          {isTip && (
+            <mesh position={[0, length, 0]} scale={[1, 0.88, 0.90]}>
+              <sphereGeometry args={[radiusTip * 0.8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+              <meshBasicMaterial
+                color={particleColor}
+                wireframe={true}
+                transparent={true}
+                opacity={0.35}
+                depthWrite={false}
+              />
+            </mesh>
+          )}
+        </group>
+      )}
+
+      {/* ---------------- 3. SOLID CYBER CHASSIS STYLE ---------------- */}
+      {handStyle === 'solid' && (
+        <group>
+          <mesh position={[0, 0, 0]}>
+            <sphereGeometry args={[radiusBase * 1.15, 16, 14]} />
+            <meshStandardMaterial
+              color={solidColor}
+              emissive={emissiveColor}
+              emissiveIntensity={isHit ? 2.5 : 0.12}
+              metalness={0.9}
+              roughness={0.2}
+            />
+          </mesh>
+
+          <mesh position={[0, length / 2, 0]}>
+            <cylinderGeometry args={[radiusTip * 1.05, radiusBase * 1.05, length, 16]} />
+            <meshStandardMaterial
+              color={solidColor}
+              emissive={emissiveColor}
+              emissiveIntensity={isHit ? 2.0 : 0.08}
+              metalness={0.85}
+              roughness={0.25}
+            />
+          </mesh>
+
+          {isTip && (
+            <mesh position={[0, length, 0]} scale={[1, 0.88, 0.90]}>
+              <sphereGeometry args={[radiusTip * 1.05, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+              <meshStandardMaterial
+                color={solidColor}
+                emissive={emissiveColor}
+                emissiveIntensity={isHit ? 2.6 : 0.18}
+                metalness={0.9}
+                roughness={0.2}
+              />
+            </mesh>
+          )}
+        </group>
+      )}
+
+      {/* ---------------- 4. CYBER WIREFRAME (STUDIO REFERENCE HAND) ---------------- */}
+      {handStyle === 'wireframe' && (
+        <group>
+          {/* Inner dark occluder body: blocks backside lines so only clean front quad lines show */}
+          <mesh position={[0, length / 2, 0]} scale={[1, 1, 0.86]}>
+            <cylinderGeometry args={[radiusTip * 0.99, radiusBase * 0.99, length, 20]} />
+            <meshBasicMaterial color="#07090d" depthWrite={true} />
+          </mesh>
+
+          <mesh position={[0, 0, 0]}>
+            <sphereGeometry args={[radiusBase * 0.99, 14, 12]} />
+            <meshBasicMaterial color="#07090d" depthWrite={true} />
+          </mesh>
+
+          {isTip && (
+            <mesh position={[0, length, 0]} scale={[1, 0.90, 0.86]}>
+              <sphereGeometry args={[radiusTip * 0.99, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2]} />
+              <meshBasicMaterial color="#07090d" depthWrite={true} />
+            </mesh>
+          )}
+
+          {/* Pure quad-grid glowing wireframe lines */}
+          <lineSegments geometry={quadLinesGeo}>
+            <lineBasicMaterial
+              color={studioWireColor}
+              transparent={true}
+              opacity={isHit ? 1.0 : 0.95}
+            />
+          </lineSegments>
+        </group>
+      )}
+
+      {/* ---------------- 5. LOW-POLY TRIANGULATED WIREFRAME STYLE ---------------- */}
+      {handStyle === 'triangulated' && (
+        <group>
+          <mesh position={[0, 0, 0]}>
+            <icosahedronGeometry args={[radiusBase * 1.25, 0]} />
+            <meshStandardMaterial
+              color={isHit ? '#ffeedd' : '#151a24'}
+              emissive={emissiveColor}
+              emissiveIntensity={isHit ? 2.0 : 0.18}
+              flatShading={true}
+              transparent={true}
+              opacity={0.8}
+            />
+          </mesh>
+          <mesh position={[0, 0, 0]}>
+            <icosahedronGeometry args={[radiusBase * 1.26, 0]} />
+            <meshBasicMaterial
+              color={particleColor}
+              wireframe={true}
+              transparent={true}
+              opacity={0.7}
+            />
+          </mesh>
+
+          <mesh position={[0, length / 2, 0]}>
+            <cylinderGeometry args={[radiusTip * 1.05, radiusBase * 1.05, length, 6]} />
+            <meshStandardMaterial
+              color={isHit ? '#ffeedd' : '#151a24'}
+              emissive={emissiveColor}
+              emissiveIntensity={isHit ? 1.8 : 0.15}
+              flatShading={true}
+              transparent={true}
+              opacity={0.8}
+            />
+          </mesh>
+          <mesh position={[0, length / 2, 0]}>
+            <cylinderGeometry args={[radiusTip * 1.06, radiusBase * 1.06, length, 6]} />
+            <meshBasicMaterial
+              color={particleColor}
+              wireframe={true}
+              transparent={true}
+              opacity={0.75}
+            />
+          </mesh>
+
+          {isTip && (
+            <>
+              <mesh position={[0, length, 0]} scale={[1, 0.88, 0.90]}>
+                <sphereGeometry args={[radiusTip * 1.05, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshStandardMaterial
+                  color={isHit ? '#ffeedd' : '#151a24'}
+                  emissive={emissiveColor}
+                  emissiveIntensity={isHit ? 2.2 : 0.22}
+                  flatShading={true}
+                  transparent={true}
+                  opacity={0.85}
+                />
+              </mesh>
+              <mesh position={[0, length, 0]} scale={[1, 0.88, 0.90]}>
+                <sphereGeometry args={[radiusTip * 1.06, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshBasicMaterial
+                  color={particleColor}
+                  wireframe={true}
+                  transparent={true}
+                  opacity={0.8}
+                />
+              </mesh>
+            </>
+          )}
+        </group>
+      )}
+
+      {/* ---------------- 6. ANATOMICAL HIGH-DENSITY HUMAN WIREFRAME STYLE ---------------- */}
+      {handStyle === 'anatomical' && (
+        <group>
+          {/* Inner anatomical muscle/bone core (provides realistic 3D depth and mass) */}
+          <mesh position={[0, length / 2, 0]}>
+            <cylinderGeometry args={[radiusTip * 1.0, radiusBase * 1.03, length, 32]} />
+            <meshStandardMaterial
+              color={isHit ? '#ffeedd' : '#0a1017'}
+              emissive={glowColor}
+              emissiveIntensity={isHit ? 1.6 : 0.12}
+              transparent={true}
+              opacity={0.42}
+              roughness={0.5}
+            />
+          </mesh>
+
+          {/* High-density phalanx contour wireframe (32 radial segments x 12 height rings) */}
+          <mesh position={[0, length / 2, 0]}>
+            <cylinderGeometry args={[radiusTip * 1.02, radiusBase * 1.05, length, 32, 12]} />
+            <meshBasicMaterial
+              color={particleColor}
+              wireframe={true}
+              transparent={true}
+              opacity={isHit ? 1.0 : 0.85}
+            />
+          </mesh>
+
+          {/* Palmar fleshy pulp pad contour on underside of the phalanx */}
+          <mesh position={[0, length * 0.48, 0.03]} scale={[0.95, 0.85, 0.55]}>
+            <sphereGeometry args={[radiusBase * 0.95, 24, 16]} />
+            <meshBasicMaterial
+              color={particleColor}
+              wireframe={true}
+              transparent={true}
+              opacity={isHit ? 0.9 : 0.65}
+            />
+          </mesh>
+
+          {/* High-density anatomical knuckle joint capsule (28 x 24 wireframe rings) */}
+          <mesh position={[0, 0, 0]}>
+            <sphereGeometry args={[radiusBase * 1.14, 28, 24]} />
+            <meshBasicMaterial
+              color={particleColor}
+              wireframe={true}
+              transparent={true}
+              opacity={isHit ? 1.0 : 0.9}
+            />
+          </mesh>
+          <mesh position={[0, 0, 0]}>
+            <sphereGeometry args={[radiusBase * 1.12, 18, 16]} />
+            <meshStandardMaterial
+              color={isHit ? '#ffeedd' : '#0c141f'}
+              emissive={glowColor}
+              emissiveIntensity={isHit ? 1.5 : 0.15}
+              transparent={true}
+              opacity={0.45}
+            />
+          </mesh>
+
+          {/* High-density curved anatomical fingertip dome (smooth organic human tip) */}
+          {isTip && (
+            <group position={[0, length, 0]} scale={[1, 0.92, 0.90]}>
+              <mesh>
+                <sphereGeometry args={[radiusTip * 1.05, 32, 24, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshBasicMaterial
+                  color={particleColor}
+                  wireframe={true}
+                  transparent={true}
+                  opacity={isHit ? 1.0 : 0.92}
+                />
+              </mesh>
+              <mesh>
+                <sphereGeometry args={[radiusTip * 1.03, 20, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshStandardMaterial
+                  color={isHit ? '#ffeedd' : '#0a1017'}
+                  emissive={glowColor}
+                  emissiveIntensity={isHit ? 1.8 : 0.16}
+                  transparent={true}
+                  opacity={0.5}
+                />
+              </mesh>
+            </group>
+          )}
+        </group>
+      )}
 
       {/* Child joint container placed at the tip of this segment */}
       {children && <group position={[0, length, 0]}>{children}</group>}
@@ -188,18 +834,26 @@ const QuantumFingerSegment: React.FC<QuantumFingerSegmentProps> = ({
   );
 };
 
+const QuantumFingerSegment = FingerSegment;
+
 // 3D Procedural Anatomical Quantum Particle Nebula Hand Model Component
 interface HandModelProps {
   side: 'rh' | 'lh';
   position?: [number, number, number];
+  handStyle?: HandStyleType;
 }
 
-const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) => {
+const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0], handStyle: propStyle }) => {
   const isHandFlashing = useGloveStore((s) => s.isHandFlashing);
   const lastHit = useGloveStore((s) => s.lastHit);
   const isHit = isHandFlashing && (!lastHit?.side || lastHit.side === side);
   const gloveState = useGloveStore((s) => s[side]);
+  const storeHandStyle = useGloveStore((s) => s.handStyle);
+  const handStyle: HandStyleType = propStyle || storeHandStyle || 'wireframe';
   
+  // Mirrored X multiplier for left hand (declared first as useMemo depends on it)
+  const sideX = side === 'lh' ? -1 : 1;
+
   // Nebula Cyan (#00f0ff) for Right Hand, Cosmic Green/Cyan (#00ffaa) for Left Hand
   const glowColor = side === 'rh' ? '#00f0ff' : '#00ffaa';
   const particleColor = isHit ? '#ffb46b' : glowColor;
@@ -209,6 +863,12 @@ const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) 
   const thenarParticleGeo = useMemo(() => createEllipsoidParticleGeometry(0.40, 0.58, 0.35, 480), []);
   const hypothenarParticleGeo = useMemo(() => createEllipsoidParticleGeometry(0.34, 0.50, 0.30, 360), []);
   const cuffParticleGeo = useMemo(() => createTaperedCylinderParticleGeometry(0.85, 0.72, 2.0, 650), []);
+
+  // Unified Continuous Sculpted Anatomical Arm & Palm Mesh (No square, no cuff cylinder - pure human hand anatomy)
+  const unifiedArmPalmData = useMemo(() => createAnatomicalArmAndPalmGeometry(sideX), [sideX]);
+
+  // Studio Cyber Wireframe Color: Electric Amber (#ff9000), White-hot radiant flash (#ffffff) on hit
+  const studioWireColor = isHit ? '#ffffff' : (side === 'rh' ? '#ff9000' : '#ffa022');
 
   const handGroup = useRef<THREE.Group>(null);
 
@@ -239,9 +899,6 @@ const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) 
     yaw: 0,
     initialized: false,
   });
-
-  // Mirrored X multiplier for left hand
-  const sideX = side === 'lh' ? -1 : 1;
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.1);
@@ -324,214 +981,497 @@ const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) 
 
   return (
     <group ref={handGroup} position={position}>
-      {/* ---------------- HOLOGRAPHIC QUANTUM PARTICLE PALM & STEM ---------------- */}
+      {/* ---------------- PALM & FOREARM CHASSIS ---------------- */}
       <group position={[0, 0, 0]}>
-        {/* Palm Metacarpal Particle Cloud */}
-        <points geometry={palmParticleGeo}>
-          <pointsMaterial
-            size={isHit ? 0.050 : 0.045}
-            color={particleColor}
-            transparent={true}
-            opacity={isHit ? 1.0 : 0.92}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </points>
+        {/* PARTICLES & HYBRID: Quantum Particle Clouds */}
+        {(handStyle === 'particles' || handStyle === 'hybrid') && (
+          <>
+            <points geometry={palmParticleGeo}>
+              <pointsMaterial
+                size={isHit ? 0.050 : 0.045}
+                color={particleColor}
+                transparent={true}
+                opacity={isHit ? 1.0 : (handStyle === 'hybrid' ? 0.82 : 0.92)}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+              />
+            </points>
 
-        {/* Thenar Eminence (Thumb Muscle Base Pad) Particles */}
-        <points geometry={thenarParticleGeo} position={[-0.52 * sideX, -0.28, 0.12]}>
-          <pointsMaterial
-            size={isHit ? 0.050 : 0.044}
-            color={particleColor}
-            transparent={true}
-            opacity={0.9}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </points>
+            <points geometry={thenarParticleGeo} position={[-0.52 * sideX, -0.28, 0.12]}>
+              <pointsMaterial
+                size={isHit ? 0.050 : 0.044}
+                color={particleColor}
+                transparent={true}
+                opacity={0.9}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+              />
+            </points>
 
-        {/* Hypothenar Eminence (Pinky Side Muscle Pad) Particles */}
-        <points geometry={hypothenarParticleGeo} position={[0.48 * sideX, -0.4, 0.08]}>
-          <pointsMaterial
-            size={isHit ? 0.048 : 0.042}
-            color={particleColor}
-            transparent={true}
-            opacity={0.88}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </points>
+            <points geometry={hypothenarParticleGeo} position={[0.48 * sideX, -0.4, 0.08]}>
+              <pointsMaterial
+                size={isHit ? 0.048 : 0.042}
+                color={particleColor}
+                transparent={true}
+                opacity={0.88}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+              />
+            </points>
 
-        {/* Forearm Stem Particles extending down into grid */}
-        <points geometry={cuffParticleGeo} position={[0, -1.8, 0]}>
-          <pointsMaterial
-            size={isHit ? 0.046 : 0.040}
-            color={particleColor}
-            transparent={true}
-            opacity={0.82}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </points>
+            <points geometry={cuffParticleGeo} position={[0, -1.8, 0]}>
+              <pointsMaterial
+                size={isHit ? 0.046 : 0.040}
+                color={particleColor}
+                transparent={true}
+                opacity={0.82}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+              />
+            </points>
+          </>
+        )}
+
+        {/* HYBRID: Translucent inner palm wireframe chassis */}
+        {handStyle === 'hybrid' && (
+          <group position={[0, 0, 0]}>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[1.4, 1.6, 0.28]} />
+              <meshBasicMaterial
+                color={particleColor}
+                wireframe={true}
+                transparent={true}
+                opacity={0.25}
+                depthWrite={false}
+              />
+            </mesh>
+            <mesh position={[0, -1.0, 0]}>
+              <cylinderGeometry args={[0.70, 0.78, 0.45, 16]} />
+              <meshBasicMaterial
+                color={particleColor}
+                wireframe={true}
+                transparent={true}
+                opacity={0.25}
+                depthWrite={false}
+              />
+            </mesh>
+          </group>
+        )}
+
+        {/* SOLID CYBER CHASSIS PALM */}
+        {handStyle === 'solid' && (
+          <group position={[0, 0, 0]}>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[1.48, 1.68, 0.32]} />
+              <meshStandardMaterial
+                color={isHit ? '#ffeedd' : '#161a22'}
+                emissive={isHit ? '#ffb46b' : glowColor}
+                emissiveIntensity={isHit ? 2.4 : 0.08}
+                metalness={0.85}
+                roughness={0.25}
+              />
+            </mesh>
+
+            <mesh position={[0, 0.05, 0.18]}>
+              <boxGeometry args={[1.28, 1.38, 0.06]} />
+              <meshStandardMaterial
+                color={isHit ? '#ffb46b' : '#222838'}
+                emissive={isHit ? '#ffb46b' : glowColor}
+                emissiveIntensity={isHit ? 2.0 : 0.15}
+                metalness={0.9}
+                roughness={0.2}
+              />
+            </mesh>
+
+            <mesh position={[0, 0.1, 0.22]}>
+              <ringGeometry args={[0.18, 0.28, 24]} />
+              <meshBasicMaterial
+                color={isHit ? '#ffeedd' : glowColor}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+
+            <mesh position={[0, -1.0, 0]}>
+              <cylinderGeometry args={[0.72, 0.80, 0.45, 18]} />
+              <meshStandardMaterial
+                color={isHit ? '#ffeedd' : '#151820'}
+                emissive={isHit ? '#ffb46b' : glowColor}
+                emissiveIntensity={isHit ? 2.0 : 0.08}
+                metalness={0.85}
+                roughness={0.3}
+              />
+            </mesh>
+
+            <mesh position={[0, -1.0, 0.41]}>
+              <boxGeometry args={[1.1, 0.05, 0.02]} />
+              <meshBasicMaterial color={isHit ? '#ffeedd' : glowColor} />
+            </mesh>
+          </group>
+        )}
+
+        {/* CYBER WIREFRAME (STUDIO REFERENCE HAND) - CONTINUOUS SCULPTED HAND & FOREARM */}
+        {handStyle === 'wireframe' && (
+          <group position={[0, 0, 0]}>
+            {/* Solid inner occluder: hides backside lines so only front-facing vector grid shows */}
+            <mesh geometry={unifiedArmPalmData.solidGeo}>
+              <meshBasicMaterial color="#07090d" depthWrite={true} />
+            </mesh>
+            {/* Continuous flowing quad wireframe grid (forearm -> wrist -> thenar/palm -> knuckle arch) */}
+            <lineSegments geometry={unifiedArmPalmData.linesGeo}>
+              <lineBasicMaterial
+                color={studioWireColor}
+                transparent={true}
+                opacity={isHit ? 1.0 : 0.95}
+              />
+            </lineSegments>
+          </group>
+        )}
+
+        {/* LOW-POLY TRIANGULATED WIREFRAME PALM */}
+        {handStyle === 'triangulated' && (
+          <group position={[0, 0, 0]}>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[1.48, 1.68, 0.32, 2, 2, 1]} />
+              <meshStandardMaterial
+                color={isHit ? '#ffeedd' : '#141822'}
+                emissive={glowColor}
+                emissiveIntensity={isHit ? 1.8 : 0.15}
+                flatShading={true}
+                transparent={true}
+                opacity={0.8}
+              />
+            </mesh>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[1.49, 1.69, 0.33, 2, 2, 1]} />
+              <meshBasicMaterial
+                color={particleColor}
+                wireframe={true}
+                transparent={true}
+                opacity={0.75}
+              />
+            </mesh>
+            <mesh position={[0, 0.05, 0.18]}>
+              <boxGeometry args={[1.25, 1.35, 0.06, 2, 2, 1]} />
+              <meshStandardMaterial
+                color={isHit ? '#ffeedd' : '#1d2331'}
+                emissive={glowColor}
+                emissiveIntensity={isHit ? 1.5 : 0.2}
+                flatShading={true}
+              />
+            </mesh>
+            <mesh position={[0, 0.05, 0.18]}>
+              <boxGeometry args={[1.26, 1.36, 0.07, 2, 2, 1]} />
+              <meshBasicMaterial
+                color={particleColor}
+                wireframe={true}
+                transparent={true}
+                opacity={0.8}
+              />
+            </mesh>
+            <mesh position={[0, -1.0, 0]}>
+              <cylinderGeometry args={[0.72, 0.80, 0.45, 8]} />
+              <meshStandardMaterial
+                color={isHit ? '#ffeedd' : '#161922'}
+                emissive={glowColor}
+                emissiveIntensity={isHit ? 1.5 : 0.1}
+                flatShading={true}
+              />
+            </mesh>
+            <mesh position={[0, -1.0, 0]}>
+              <cylinderGeometry args={[0.73, 0.81, 0.45, 8]} />
+              <meshBasicMaterial
+                color={particleColor}
+                wireframe={true}
+                transparent={true}
+                opacity={0.75}
+              />
+            </mesh>
+          </group>
+        )}
+
+        {/* ---------------- ANATOMICAL HIGH-DENSITY HUMAN WIREFRAME PALM ---------------- */}
+        {handStyle === 'anatomical' && (
+          <group position={[0, 0, 0]}>
+            {/* Metacarpal Palm Chassis (28 x 28 x 8 dense wireframe grid) */}
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[1.48, 1.68, 0.32, 28, 28, 8]} />
+              <meshBasicMaterial
+                color={particleColor}
+                wireframe={true}
+                transparent={true}
+                opacity={isHit ? 1.0 : 0.8}
+              />
+            </mesh>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[1.46, 1.66, 0.30, 12, 12, 4]} />
+              <meshStandardMaterial
+                color={isHit ? '#ffeedd' : '#0a1017'}
+                emissive={glowColor}
+                emissiveIntensity={isHit ? 1.5 : 0.12}
+                transparent={true}
+                opacity={0.45}
+              />
+            </mesh>
+
+            {/* Thenar Muscle Mound (Thumb Base Fleshy Pad, high density 28 x 22) */}
+            <mesh position={[-0.50 * sideX, -0.28, 0.14]} rotation={[0.2, 0.1 * sideX, 0.35 * sideX]} scale={[1.0, 1.35, 0.85]}>
+              <sphereGeometry args={[0.38, 28, 22]} />
+              <meshBasicMaterial
+                color={particleColor}
+                wireframe={true}
+                transparent={true}
+                opacity={isHit ? 1.0 : 0.85}
+              />
+            </mesh>
+            <mesh position={[-0.50 * sideX, -0.28, 0.14]} rotation={[0.2, 0.1 * sideX, 0.35 * sideX]} scale={[0.98, 1.33, 0.83]}>
+              <sphereGeometry args={[0.38, 16, 14]} />
+              <meshStandardMaterial
+                color={isHit ? '#ffeedd' : '#0e1622'}
+                emissive={glowColor}
+                emissiveIntensity={isHit ? 1.6 : 0.15}
+                transparent={true}
+                opacity={0.45}
+              />
+            </mesh>
+
+            {/* Hypothenar Muscle Mound (Pinky Heel Fleshy Pad, high density 26 x 20) */}
+            <mesh position={[0.48 * sideX, -0.38, 0.10]} rotation={[-0.1, 0, -0.15 * sideX]} scale={[0.85, 1.25, 0.75]}>
+              <sphereGeometry args={[0.34, 26, 20]} />
+              <meshBasicMaterial
+                color={particleColor}
+                wireframe={true}
+                transparent={true}
+                opacity={isHit ? 1.0 : 0.85}
+              />
+            </mesh>
+            <mesh position={[0.48 * sideX, -0.38, 0.10]} rotation={[-0.1, 0, -0.15 * sideX]} scale={[0.83, 1.23, 0.73]}>
+              <sphereGeometry args={[0.34, 16, 14]} />
+              <meshStandardMaterial
+                color={isHit ? '#ffeedd' : '#0e1622'}
+                emissive={glowColor}
+                emissiveIntensity={isHit ? 1.6 : 0.15}
+                transparent={true}
+                opacity={0.45}
+              />
+            </mesh>
+
+            {/* Metacarpal Tendon Lines (4 anatomical tendon ridges leading to the 4 knuckles) */}
+            {/* Index tendon */}
+            <mesh position={[-0.24 * sideX, 0.40, 0.16]} rotation={[0, 0, 0.08 * sideX]}>
+              <cylinderGeometry args={[0.045, 0.05, 0.85, 16, 6]} />
+              <meshBasicMaterial color={particleColor} wireframe={true} transparent={true} opacity={0.7} />
+            </mesh>
+            {/* Middle tendon */}
+            <mesh position={[-0.08 * sideX, 0.44, 0.16]} rotation={[0, 0, 0]}>
+              <cylinderGeometry args={[0.048, 0.052, 0.90, 16, 6]} />
+              <meshBasicMaterial color={particleColor} wireframe={true} transparent={true} opacity={0.7} />
+            </mesh>
+            {/* Ring tendon */}
+            <mesh position={[0.09 * sideX, 0.42, 0.16]} rotation={[0, 0, -0.06 * sideX]}>
+              <cylinderGeometry args={[0.045, 0.05, 0.85, 16, 6]} />
+              <meshBasicMaterial color={particleColor} wireframe={true} transparent={true} opacity={0.7} />
+            </mesh>
+            {/* Pinky tendon */}
+            <mesh position={[0.26 * sideX, 0.36, 0.15]} rotation={[0, 0, -0.14 * sideX]}>
+              <cylinderGeometry args={[0.042, 0.048, 0.80, 16, 6]} />
+              <meshBasicMaterial color={particleColor} wireframe={true} transparent={true} opacity={0.7} />
+            </mesh>
+
+            {/* Anatomical Wrist / Carpal Base (32 x 10 wireframe rings) */}
+            <mesh position={[0, -1.02, 0]}>
+              <cylinderGeometry args={[0.74, 0.82, 0.52, 32, 10]} />
+              <meshBasicMaterial
+                color={particleColor}
+                wireframe={true}
+                transparent={true}
+                opacity={isHit ? 1.0 : 0.8}
+              />
+            </mesh>
+            <mesh position={[0, -1.02, 0]}>
+              <cylinderGeometry args={[0.73, 0.81, 0.50, 18, 6]} />
+              <meshStandardMaterial
+                color={isHit ? '#ffeedd' : '#0a1017'}
+                emissive={glowColor}
+                emissiveIntensity={isHit ? 1.4 : 0.12}
+                transparent={true}
+                opacity={0.4}
+              />
+            </mesh>
+          </group>
+        )}
       </group>
 
       {/* ---------------- THUMB ---------------- */}
       <group position={[-0.78 * sideX, -0.28, 0.12]} rotation={[0.35, -0.5 * sideX, 0.75 * sideX]}>
         <group ref={thumbMCP}>
-          <QuantumFingerSegment
+          <FingerSegment
             length={0.52}
             radiusBase={0.16}
             radiusTip={0.14}
             isHit={isHit}
             glowColor={glowColor}
+            handStyle={handStyle}
           >
             <group ref={thumbPIP}>
-              <QuantumFingerSegment
+              <FingerSegment
                 length={0.42}
                 radiusBase={0.14}
                 radiusTip={0.10}
                 isHit={isHit}
                 glowColor={glowColor}
                 isTip={true}
+                handStyle={handStyle}
               />
             </group>
-          </QuantumFingerSegment>
+          </FingerSegment>
         </group>
       </group>
 
       {/* ---------------- INDEX FINGER (F1) - Natural -8° Spread ---------------- */}
       <group position={[-0.48 * sideX, 0.82, 0]} rotation={[0, 0, 0.08 * sideX]}>
         <group ref={indexMCP}>
-          <QuantumFingerSegment
+          <FingerSegment
             length={0.60}
             radiusBase={0.135}
             radiusTip={0.115}
             isHit={isHit}
             glowColor={glowColor}
+            handStyle={handStyle}
           >
             <group ref={indexPIP}>
-              <QuantumFingerSegment
+              <FingerSegment
                 length={0.46}
                 radiusBase={0.115}
                 radiusTip={0.10}
                 isHit={isHit}
                 glowColor={glowColor}
+                handStyle={handStyle}
               >
                 <group ref={indexDIP}>
-                  <QuantumFingerSegment
+                  <FingerSegment
                     length={0.36}
                     radiusBase={0.10}
                     radiusTip={0.085}
                     isHit={isHit}
                     glowColor={glowColor}
                     isTip={true}
+                    handStyle={handStyle}
                   />
                 </group>
-              </QuantumFingerSegment>
+              </FingerSegment>
             </group>
-          </QuantumFingerSegment>
+          </FingerSegment>
         </group>
       </group>
 
       {/* ---------------- MIDDLE FINGER (F2) - Longest Central Reference ---------------- */}
       <group position={[-0.16 * sideX, 0.92, 0]} rotation={[0, 0, 0]}>
         <group ref={middleMCP}>
-          <QuantumFingerSegment
+          <FingerSegment
             length={0.68}
             radiusBase={0.14}
             radiusTip={0.12}
             isHit={isHit}
             glowColor={glowColor}
+            handStyle={handStyle}
           >
             <group ref={middlePIP}>
-              <QuantumFingerSegment
+              <FingerSegment
                 length={0.50}
                 radiusBase={0.12}
                 radiusTip={0.105}
                 isHit={isHit}
                 glowColor={glowColor}
+                handStyle={handStyle}
               >
                 <group ref={middleDIP}>
-                  <QuantumFingerSegment
+                  <FingerSegment
                     length={0.38}
                     radiusBase={0.105}
                     radiusTip={0.09}
                     isHit={isHit}
                     glowColor={glowColor}
                     isTip={true}
+                    handStyle={handStyle}
                   />
                 </group>
-              </QuantumFingerSegment>
+              </FingerSegment>
             </group>
-          </QuantumFingerSegment>
+          </FingerSegment>
         </group>
       </group>
 
       {/* ---------------- RING FINGER (F3) - Natural +7° Spread ---------------- */}
       <group position={[0.17 * sideX, 0.86, 0]} rotation={[0, 0, -0.07 * sideX]}>
         <group ref={ringMCP}>
-          <QuantumFingerSegment
+          <FingerSegment
             length={0.63}
             radiusBase={0.135}
             radiusTip={0.115}
             isHit={isHit}
             glowColor={glowColor}
+            handStyle={handStyle}
           >
             <group ref={ringPIP}>
-              <QuantumFingerSegment
+              <FingerSegment
                 length={0.46}
                 radiusBase={0.115}
                 radiusTip={0.098}
                 isHit={isHit}
                 glowColor={glowColor}
+                handStyle={handStyle}
               >
                 <group ref={ringDIP}>
-                  <QuantumFingerSegment
+                  <FingerSegment
                     length={0.36}
                     radiusBase={0.098}
                     radiusTip={0.085}
                     isHit={isHit}
                     glowColor={glowColor}
                     isTip={true}
+                    handStyle={handStyle}
                   />
                 </group>
-              </QuantumFingerSegment>
+              </FingerSegment>
             </group>
-          </QuantumFingerSegment>
+          </FingerSegment>
         </group>
       </group>
 
       {/* ---------------- PINKY FINGER (F4) - Natural +16° Spread & Slim Taper ---------------- */}
       <group position={[0.48 * sideX, 0.75, 0]} rotation={[0, 0, -0.16 * sideX]}>
         <group ref={pinkyMCP}>
-          <QuantumFingerSegment
+          <FingerSegment
             length={0.50}
             radiusBase={0.12}
             radiusTip={0.10}
             isHit={isHit}
             glowColor={glowColor}
+            handStyle={handStyle}
           >
             <group ref={pinkyPIP}>
-              <QuantumFingerSegment
+              <FingerSegment
                 length={0.38}
                 radiusBase={0.10}
                 radiusTip={0.085}
                 isHit={isHit}
                 glowColor={glowColor}
+                handStyle={handStyle}
               >
                 <group ref={pinkyDIP}>
-                  <QuantumFingerSegment
+                  <FingerSegment
                     length={0.30}
                     radiusBase={0.085}
                     radiusTip={0.072}
                     isHit={isHit}
                     glowColor={glowColor}
                     isTip={true}
+                    handStyle={handStyle}
                   />
                 </group>
-              </QuantumFingerSegment>
+              </FingerSegment>
             </group>
-          </QuantumFingerSegment>
+          </FingerSegment>
         </group>
       </group>
     </group>
@@ -542,11 +1482,14 @@ const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) 
 export interface Hand3DProps {
   side?: 'rh' | 'lh';
   viewMode?: 'rh' | 'lh' | 'both';
+  handStyle?: HandStyleType;
 }
 
-export const Hand3D: React.FC<Hand3DProps> = ({ side, viewMode }) => {
+export const Hand3D: React.FC<Hand3DProps> = ({ side, viewMode, handStyle: propStyle }) => {
   const storeViewMode = useGloveStore((s) => s.viewMode);
+  const storeHandStyle = useGloveStore((s) => s.handStyle);
   const activeViewMode = viewMode || storeViewMode || side || 'both';
+  const activeHandStyle: HandStyleType = propStyle || storeHandStyle || 'particles';
 
   const isBoth = activeViewMode === 'both';
   const cameraPos: [number, number, number] = isBoth ? [0, 1.3, 6.2] : [0, 1.2, 5.2];
@@ -559,18 +1502,20 @@ export const Hand3D: React.FC<Hand3DProps> = ({ side, viewMode }) => {
         className="w-full h-full cursor-grab active:cursor-grabbing"
       >
         {/* Holographic Quantum Cyberspace Lighting */}
-        <ambientLight intensity={0.6} />
+        <ambientLight intensity={0.7} />
+        <directionalLight position={[6, 8, 5]} intensity={1.2} color="#eef6ff" />
+        <directionalLight position={[-6, -4, -4]} intensity={0.6} color="#35c3ff" />
         <pointLight position={[0, 0, 5]} intensity={1.2} color="#00f0ff" distance={12} />
         <pointLight position={[-4, 4, 3]} intensity={0.9} color="#00ffaa" distance={10} />
 
-        {/* The Holographic Quantum Particle Hand Model(s) - GLOVETONE v1.0 Style */}
+        {/* The Cyber Hand Model(s) */}
         {activeViewMode === 'both' ? (
           <>
-            <HandModel side="lh" position={[-1.75, -0.6, 0]} />
-            <HandModel side="rh" position={[1.75, -0.6, 0]} />
+            <HandModel side="lh" position={[-1.75, -0.6, 0]} handStyle={activeHandStyle} />
+            <HandModel side="rh" position={[1.75, -0.6, 0]} handStyle={activeHandStyle} />
           </>
         ) : (
-          <HandModel side={activeViewMode === 'lh' ? 'lh' : 'rh'} position={[0, -0.6, 0]} />
+          <HandModel side={activeViewMode === 'lh' ? 'lh' : 'rh'} position={[0, -0.6, 0]} handStyle={activeHandStyle} />
         )}
 
         {/* Cyberpunk Grid Floor */}
