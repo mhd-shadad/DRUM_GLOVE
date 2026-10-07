@@ -4,40 +4,125 @@ import { OrbitControls, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { useGloveStore } from '../store/useGloveStore';
 
-// Individual Finger Segment Component
-interface FingerSegmentProps {
+// Helper to generate particle positions sampled inside/on a tapered cylinder (human finger phalanx)
+const createTaperedCylinderParticleGeometry = (
+  radiusTop: number,
+  radiusBottom: number,
+  length: number,
+  count: number = 260
+) => {
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const yRatio = Math.random(); // 0 at base, 1 at tip
+    const currentRadius = radiusBottom + (radiusTop - radiusBottom) * yRatio;
+    const u = Math.random();
+    const r = currentRadius * Math.sqrt(u);
+    const theta = Math.random() * Math.PI * 2;
+    const y = yRatio * length;
+    const x = r * Math.cos(theta);
+    const z = r * Math.sin(theta);
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  return geo;
+};
+
+// Helper to generate particle positions sampled inside an ellipsoid (muscle pads & knuckles)
+const createEllipsoidParticleGeometry = (rx: number, ry: number, rz: number, count: number = 400) => {
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const u = Math.random();
+    const r = Math.cbrt(u);
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const x = r * rx * Math.sin(phi) * Math.cos(theta);
+    const y = r * ry * Math.sin(phi) * Math.sin(theta);
+    const z = r * rz * Math.cos(phi);
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  return geo;
+};
+
+// Helper to generate particle positions for human palm metacarpals volume
+const createHumanPalmParticleGeometry = (width: number, height: number, depth: number, count: number = 1400) => {
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const yRatio = Math.random();
+    const widthFactor = 0.82 + 0.28 * yRatio;
+    const x = (Math.random() - 0.5) * width * widthFactor;
+    const y = (yRatio - 0.5) * height;
+    const archZ = Math.cos((x / width) * Math.PI) * 0.08;
+    const z = (Math.random() - 0.5) * depth + archZ;
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  return geo;
+};
+
+// Anatomical Human Finger Segment Component (Pure Holographic Quantum Particles)
+interface QuantumFingerSegmentProps {
   length: number;
-  radius: number;
+  radiusBase: number;
+  radiusTip: number;
   isHit: boolean;
+  glowColor?: string;
   children?: React.ReactNode;
 }
 
-const FingerSegment: React.FC<FingerSegmentProps> = ({ length, radius, isHit, children }) => {
+const QuantumFingerSegment: React.FC<QuantumFingerSegmentProps> = ({
+  length,
+  radiusBase,
+  radiusTip,
+  isHit,
+  glowColor = '#00f0ff',
+  children,
+}) => {
+  const particleGeo = useMemo(
+    () => createTaperedCylinderParticleGeometry(radiusTip * 1.15, radiusBase * 1.15, length, 260),
+    [radiusBase, radiusTip, length]
+  );
+  const knuckleParticleGeo = useMemo(
+    () => createEllipsoidParticleGeometry(radiusBase * 1.3, radiusBase * 1.3, radiusBase * 1.3, 110),
+    [radiusBase]
+  );
+
+  const particleColor = isHit ? '#ffeedd' : glowColor;
+
   return (
     <group>
-      {/* Phalanx Bone Mesh */}
-      <mesh position={[0, length / 2, 0]}>
-        <cylinderGeometry args={[radius * 0.85, radius, length, 12]} />
-        <meshStandardMaterial
-          color={isHit ? '#ffeedd' : '#222834'}
-          emissive={isHit ? '#ffb46b' : '#35c3ff'}
-          emissiveIntensity={isHit ? 2.5 : 0.08}
-          metalness={0.7}
-          roughness={0.3}
+      {/* Phalanx Bone Quantum Particle Cloud */}
+      <points geometry={particleGeo}>
+        <pointsMaterial
+          size={isHit ? 0.052 : 0.044}
+          color={particleColor}
+          transparent={true}
+          opacity={isHit ? 1.0 : 0.9}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
         />
-      </mesh>
+      </points>
 
-      {/* Joint Knuckle Ring */}
-      <mesh position={[0, 0, 0]}>
-        <sphereGeometry args={[radius * 1.15, 12, 12]} />
-        <meshStandardMaterial
-          color={isHit ? '#ffb46b' : '#35c3ff'}
-          emissive={isHit ? '#ffb46b' : '#35c3ff'}
-          emissiveIntensity={isHit ? 3.0 : 0.4}
-          metalness={0.9}
-          roughness={0.2}
+      {/* Joint Knuckle Particle Cloud */}
+      <points geometry={knuckleParticleGeo} position={[0, 0, 0]}>
+        <pointsMaterial
+          size={isHit ? 0.055 : 0.046}
+          color={particleColor}
+          transparent={true}
+          opacity={isHit ? 1.0 : 0.95}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
         />
-      </mesh>
+      </points>
 
       {/* Child joint container placed at the tip of this segment */}
       <group position={[0, length, 0]}>{children}</group>
@@ -45,14 +130,28 @@ const FingerSegment: React.FC<FingerSegmentProps> = ({ length, radius, isHit, ch
   );
 };
 
-// 3D Procedural Hand Model Component
+// 3D Procedural Anatomical Quantum Particle Nebula Hand Model Component
 interface HandModelProps {
   side: 'rh' | 'lh';
+  position?: [number, number, number];
 }
 
-const HandModel: React.FC<HandModelProps> = ({ side }) => {
-  const isHit = useGloveStore((s) => s.isHandFlashing);
+const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) => {
+  const isHandFlashing = useGloveStore((s) => s.isHandFlashing);
+  const lastHit = useGloveStore((s) => s.lastHit);
+  const isHit = isHandFlashing && (!lastHit?.side || lastHit.side === side);
   const gloveState = useGloveStore((s) => s[side]);
+  
+  // Nebula Cyan (#00f0ff) for Right Hand, Cosmic Green/Cyan (#00ffaa) for Left Hand
+  const glowColor = side === 'rh' ? '#00f0ff' : '#00ffaa';
+  const particleColor = isHit ? '#ffb46b' : glowColor;
+
+  // Geometries for Palm, Muscle Base Pads & Forearm Stem Particles
+  const palmParticleGeo = useMemo(() => createHumanPalmParticleGeometry(1.5, 1.7, 0.42, 1400), []);
+  const thenarParticleGeo = useMemo(() => createEllipsoidParticleGeometry(0.40, 0.58, 0.35, 480), []);
+  const hypothenarParticleGeo = useMemo(() => createEllipsoidParticleGeometry(0.34, 0.50, 0.30, 360), []);
+  const cuffParticleGeo = useMemo(() => createTaperedCylinderParticleGeometry(0.85, 0.72, 2.0, 650), []);
+  const tipDomeGeo = useMemo(() => createEllipsoidParticleGeometry(0.12, 0.12, 0.12, 60), []);
 
   const handGroup = useRef<THREE.Group>(null);
 
@@ -92,8 +191,6 @@ const HandModel: React.FC<HandModelProps> = ({ side }) => {
     const { f1, f2, f3, f4, ax, ay, az, gx, gy, gz } = gloveState;
 
     // 1. MAP flex sensors to finger curling
-    // f1 -> Index, f2 -> Middle, f3 -> Ring, f4 -> Pinky
-    // Range: 0 - 4095 maps to 0 - Math.PI * 0.9
     const maxCurl = Math.PI * 0.9;
     const targetIndex = (Math.max(0, Math.min(4095, f1)) / 4095) * maxCurl;
     const targetMiddle = (Math.max(0, Math.min(4095, f2)) / 4095) * maxCurl;
@@ -124,19 +221,17 @@ const HandModel: React.FC<HandModelProps> = ({ side }) => {
     lerpJoint(pinkyDIP, targetPinky * 0.20);
 
     // Subtle natural thumb resting curl
-    const thumbCurl = (targetIndex * 0.3 + targetMiddle * 0.2);
+    const thumbCurl = targetIndex * 0.3 + targetMiddle * 0.2;
     lerpJoint(thumbMCP, thumbCurl * 0.4);
     lerpJoint(thumbPIP, thumbCurl * 0.3);
 
     // 2. MAP IMU to hand.rotation using Complementary Filter (alpha = 0.98)
-    const hasIMUData = (ax !== 0 || ay !== 0 || az !== 0 || gx !== 0 || gy !== 0 || gz !== 0);
+    const hasIMUData = ax !== 0 || ay !== 0 || az !== 0 || gx !== 0 || gy !== 0 || gz !== 0;
 
     if (hasIMUData && handGroup.current) {
-      // Accelerometer pitch & roll
       const pitchAcc = Math.atan2(-ax, Math.sqrt(ay * ay + az * az));
       const rollAcc = Math.atan2(ay, az);
 
-      // Gyroscope angular rates in rad/s (firmware outputs deg/s)
       const gxRad = (gx * Math.PI) / 180;
       const gyRad = (gy * Math.PI) / 180;
       const gzRad = (gz * Math.PI) / 180;
@@ -148,22 +243,19 @@ const HandModel: React.FC<HandModelProps> = ({ side }) => {
         filterState.current.initialized = true;
       }
 
-      // Complementary filter: alpha * (integrated_gyro) + (1 - alpha) * (accel)
       const alpha = 0.98;
       const newPitch = alpha * (filterState.current.pitch + gxRad * dt) + (1 - alpha) * pitchAcc;
       const newRoll = alpha * (filterState.current.roll + gyRad * dt) + (1 - alpha) * rollAcc;
-      const newYaw = (filterState.current.yaw + gzRad * dt) * 0.998; // gentle zero-centering
+      const newYaw = (filterState.current.yaw + gzRad * dt) * 0.998;
 
       filterState.current.pitch = newPitch;
       filterState.current.roll = newRoll;
       filterState.current.yaw = newYaw;
 
-      // Smoothly apply fused orientation to hand group
       handGroup.current.rotation.x = THREE.MathUtils.lerp(handGroup.current.rotation.x, newPitch, 0.2);
       handGroup.current.rotation.y = THREE.MathUtils.lerp(handGroup.current.rotation.y, newYaw, 0.2);
       handGroup.current.rotation.z = THREE.MathUtils.lerp(handGroup.current.rotation.z, newRoll, 0.2);
     } else if (handGroup.current) {
-      // Gentle subtle breathing float when idle
       const time = performance.now() * 0.001;
       const idlePitch = Math.sin(time * 0.8) * 0.03;
       const idleYaw = Math.cos(time * 0.5) * 0.04;
@@ -174,159 +266,270 @@ const HandModel: React.FC<HandModelProps> = ({ side }) => {
   });
 
   return (
-    <group ref={handGroup} position={[0, -0.6, 0]}>
-      {/* ---------------- PALM ---------------- */}
+    <group ref={handGroup} position={position}>
+      {/* ---------------- HOLOGRAPHIC QUANTUM PARTICLE PALM & STEM ---------------- */}
       <group position={[0, 0, 0]}>
-        {/* Main Central Palm Chassis */}
-        <mesh position={[0, 0, 0]}>
-          <boxGeometry args={[1.5, 1.7, 0.32]} />
-          <meshStandardMaterial
-            color={isHit ? '#ffeedd' : '#1d222d'}
-            emissive={isHit ? '#ffb46b' : '#35c3ff'}
-            emissiveIntensity={isHit ? 2.5 : 0.06}
-            metalness={0.8}
-            roughness={0.25}
+        {/* Palm Metacarpal Particle Cloud */}
+        <points geometry={palmParticleGeo}>
+          <pointsMaterial
+            size={isHit ? 0.050 : 0.045}
+            color={particleColor}
+            transparent={true}
+            opacity={isHit ? 1.0 : 0.92}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
           />
-        </mesh>
+        </points>
 
-        {/* Cyber Dorsal Shield / Cover Plate */}
-        <mesh position={[0, 0.05, 0.18]}>
-          <boxGeometry args={[1.3, 1.4, 0.06]} />
-          <meshStandardMaterial
-            color={isHit ? '#ffb46b' : '#282e3d'}
-            emissive={isHit ? '#ffb46b' : '#35c3ff'}
-            emissiveIntensity={isHit ? 2.0 : 0.12}
-            metalness={0.9}
-            roughness={0.2}
+        {/* Thenar Eminence (Thumb Muscle Base Pad) Particles */}
+        <points geometry={thenarParticleGeo} position={[-0.52 * sideX, -0.28, 0.12]}>
+          <pointsMaterial
+            size={isHit ? 0.050 : 0.044}
+            color={particleColor}
+            transparent={true}
+            opacity={0.9}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
           />
-        </mesh>
+        </points>
 
-        {/* Luminous Core Emblem / LED Ring */}
-        <mesh position={[0, 0.1, 0.22]}>
-          <ringGeometry args={[0.18, 0.26, 24]} />
-          <meshBasicMaterial color={isHit ? '#ffb46b' : '#7af0c4'} side={THREE.DoubleSide} />
-        </mesh>
-
-        {/* Wrist Base / Glove Cuff */}
-        <mesh position={[0, -1.0, 0]}>
-          <cylinderGeometry args={[0.72, 0.8, 0.45, 16]} />
-          <meshStandardMaterial
-            color={isHit ? '#ffeedd' : '#181b22'}
-            emissive={isHit ? '#ffb46b' : '#35c3ff'}
-            emissiveIntensity={isHit ? 2.0 : 0.05}
-            metalness={0.85}
-            roughness={0.3}
+        {/* Hypothenar Eminence (Pinky Side Muscle Pad) Particles */}
+        <points geometry={hypothenarParticleGeo} position={[0.48 * sideX, -0.4, 0.08]}>
+          <pointsMaterial
+            size={isHit ? 0.048 : 0.042}
+            color={particleColor}
+            transparent={true}
+            opacity={0.88}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
           />
-        </mesh>
+        </points>
 
-        {/* Wrist Cyber Circuit Glow Line */}
-        <mesh position={[0, -1.0, 0.41]}>
-          <boxGeometry args={[1.1, 0.05, 0.02]} />
-          <meshBasicMaterial color={isHit ? '#ffb46b' : '#35c3ff'} />
-        </mesh>
+        {/* Forearm Stem Particles extending down into grid */}
+        <points geometry={cuffParticleGeo} position={[0, -1.8, 0]}>
+          <pointsMaterial
+            size={isHit ? 0.046 : 0.040}
+            color={particleColor}
+            transparent={true}
+            opacity={0.82}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </points>
       </group>
 
       {/* ---------------- THUMB ---------------- */}
-      <group
-        position={[-0.82 * sideX, -0.25, 0.08]}
-        rotation={[0.3, -0.45 * sideX, 0.7 * sideX]}
-      >
+      <group position={[-0.78 * sideX, -0.28, 0.12]} rotation={[0.35, -0.5 * sideX, 0.75 * sideX]}>
         <group ref={thumbMCP}>
-          <FingerSegment length={0.52} radius={0.16} isHit={isHit}>
+          <QuantumFingerSegment
+            length={0.52}
+            radiusBase={0.16}
+            radiusTip={0.14}
+            isHit={isHit}
+            glowColor={glowColor}
+          >
             <group ref={thumbPIP}>
-              <FingerSegment length={0.42} radius={0.14} isHit={isHit}>
-                {/* Thumb tip */}
-                <mesh position={[0, 0.42, 0]}>
-                  <sphereGeometry args={[0.13, 12, 12]} />
-                  <meshBasicMaterial color={isHit ? '#ffb46b' : '#7af0c4'} />
-                </mesh>
-              </FingerSegment>
+              <QuantumFingerSegment
+                length={0.42}
+                radiusBase={0.14}
+                radiusTip={0.10}
+                isHit={isHit}
+                glowColor={glowColor}
+              >
+                {/* Thumb tip particle node */}
+                <points geometry={tipDomeGeo} position={[0, 0.42, 0]}>
+                  <pointsMaterial
+                    size={0.048}
+                    color={particleColor}
+                    transparent={true}
+                    opacity={0.95}
+                    blending={THREE.AdditiveBlending}
+                    depthWrite={false}
+                  />
+                </points>
+              </QuantumFingerSegment>
             </group>
-          </FingerSegment>
+          </QuantumFingerSegment>
         </group>
       </group>
 
-      {/* ---------------- INDEX FINGER (F1) ---------------- */}
-      <group position={[-0.52 * sideX, 0.88, 0]}>
+      {/* ---------------- INDEX FINGER (F1) - Natural -8° Spread ---------------- */}
+      <group position={[-0.48 * sideX, 0.82, 0]} rotation={[0, 0, 0.08 * sideX]}>
         <group ref={indexMCP}>
-          <FingerSegment length={0.62} radius={0.135} isHit={isHit}>
+          <QuantumFingerSegment
+            length={0.60}
+            radiusBase={0.135}
+            radiusTip={0.115}
+            isHit={isHit}
+            glowColor={glowColor}
+          >
             <group ref={indexPIP}>
-              <FingerSegment length={0.48} radius={0.12} isHit={isHit}>
+              <QuantumFingerSegment
+                length={0.46}
+                radiusBase={0.115}
+                radiusTip={0.10}
+                isHit={isHit}
+                glowColor={glowColor}
+              >
                 <group ref={indexDIP}>
-                  <FingerSegment length={0.38} radius={0.105} isHit={isHit}>
-                    {/* Fingertip Sensor Dome */}
-                    <mesh position={[0, 0.38, 0]}>
-                      <sphereGeometry args={[0.10, 12, 12]} />
-                      <meshBasicMaterial color={isHit ? '#ffb46b' : '#35c3ff'} />
-                    </mesh>
-                  </FingerSegment>
+                  <QuantumFingerSegment
+                    length={0.36}
+                    radiusBase={0.10}
+                    radiusTip={0.085}
+                    isHit={isHit}
+                    glowColor={glowColor}
+                  >
+                    {/* Fingertip Sensor Particle Node */}
+                    <points geometry={tipDomeGeo} position={[0, 0.36, 0]}>
+                      <pointsMaterial
+                        size={0.048}
+                        color={particleColor}
+                        transparent={true}
+                        opacity={0.95}
+                        blending={THREE.AdditiveBlending}
+                        depthWrite={false}
+                      />
+                    </points>
+                  </QuantumFingerSegment>
                 </group>
-              </FingerSegment>
+              </QuantumFingerSegment>
             </group>
-          </FingerSegment>
+          </QuantumFingerSegment>
         </group>
       </group>
 
-      {/* ---------------- MIDDLE FINGER (F2) ---------------- */}
-      <group position={[-0.17 * sideX, 0.95, 0]}>
+      {/* ---------------- MIDDLE FINGER (F2) - Longest Central Reference ---------------- */}
+      <group position={[-0.16 * sideX, 0.92, 0]} rotation={[0, 0, 0]}>
         <group ref={middleMCP}>
-          <FingerSegment length={0.70} radius={0.14} isHit={isHit}>
+          <QuantumFingerSegment
+            length={0.68}
+            radiusBase={0.14}
+            radiusTip={0.12}
+            isHit={isHit}
+            glowColor={glowColor}
+          >
             <group ref={middlePIP}>
-              <FingerSegment length={0.52} radius={0.125} isHit={isHit}>
+              <QuantumFingerSegment
+                length={0.50}
+                radiusBase={0.12}
+                radiusTip={0.105}
+                isHit={isHit}
+                glowColor={glowColor}
+              >
                 <group ref={middleDIP}>
-                  <FingerSegment length={0.40} radius={0.11} isHit={isHit}>
-                    {/* Fingertip Sensor Dome */}
-                    <mesh position={[0, 0.40, 0]}>
-                      <sphereGeometry args={[0.105, 12, 12]} />
-                      <meshBasicMaterial color={isHit ? '#ffb46b' : '#35c3ff'} />
-                    </mesh>
-                  </FingerSegment>
+                  <QuantumFingerSegment
+                    length={0.38}
+                    radiusBase={0.105}
+                    radiusTip={0.09}
+                    isHit={isHit}
+                    glowColor={glowColor}
+                  >
+                    {/* Fingertip Sensor Particle Node */}
+                    <points geometry={tipDomeGeo} position={[0, 0.38, 0]}>
+                      <pointsMaterial
+                        size={0.048}
+                        color={particleColor}
+                        transparent={true}
+                        opacity={0.95}
+                        blending={THREE.AdditiveBlending}
+                        depthWrite={false}
+                      />
+                    </points>
+                  </QuantumFingerSegment>
                 </group>
-              </FingerSegment>
+              </QuantumFingerSegment>
             </group>
-          </FingerSegment>
+          </QuantumFingerSegment>
         </group>
       </group>
 
-      {/* ---------------- RING FINGER (F3) ---------------- */}
-      <group position={[0.18 * sideX, 0.91, 0]}>
+      {/* ---------------- RING FINGER (F3) - Natural +7° Spread ---------------- */}
+      <group position={[0.17 * sideX, 0.86, 0]} rotation={[0, 0, -0.07 * sideX]}>
         <group ref={ringMCP}>
-          <FingerSegment length={0.64} radius={0.135} isHit={isHit}>
+          <QuantumFingerSegment
+            length={0.63}
+            radiusBase={0.135}
+            radiusTip={0.115}
+            isHit={isHit}
+            glowColor={glowColor}
+          >
             <group ref={ringPIP}>
-              <FingerSegment length={0.48} radius={0.12} isHit={isHit}>
+              <QuantumFingerSegment
+                length={0.46}
+                radiusBase={0.115}
+                radiusTip={0.098}
+                isHit={isHit}
+                glowColor={glowColor}
+              >
                 <group ref={ringDIP}>
-                  <FingerSegment length={0.38} radius={0.105} isHit={isHit}>
-                    {/* Fingertip Sensor Dome */}
-                    <mesh position={[0, 0.38, 0]}>
-                      <sphereGeometry args={[0.10, 12, 12]} />
-                      <meshBasicMaterial color={isHit ? '#ffb46b' : '#35c3ff'} />
-                    </mesh>
-                  </FingerSegment>
+                  <QuantumFingerSegment
+                    length={0.36}
+                    radiusBase={0.098}
+                    radiusTip={0.085}
+                    isHit={isHit}
+                    glowColor={glowColor}
+                  >
+                    {/* Fingertip Sensor Particle Node */}
+                    <points geometry={tipDomeGeo} position={[0, 0.36, 0]}>
+                      <pointsMaterial
+                        size={0.048}
+                        color={particleColor}
+                        transparent={true}
+                        opacity={0.95}
+                        blending={THREE.AdditiveBlending}
+                        depthWrite={false}
+                      />
+                    </points>
+                  </QuantumFingerSegment>
                 </group>
-              </FingerSegment>
+              </QuantumFingerSegment>
             </group>
-          </FingerSegment>
+          </QuantumFingerSegment>
         </group>
       </group>
 
-      {/* ---------------- PINKY FINGER (F4) ---------------- */}
-      <group position={[0.53 * sideX, 0.81, 0]}>
+      {/* ---------------- PINKY FINGER (F4) - Natural +16° Spread & Slim Taper ---------------- */}
+      <group position={[0.48 * sideX, 0.75, 0]} rotation={[0, 0, -0.16 * sideX]}>
         <group ref={pinkyMCP}>
-          <FingerSegment length={0.50} radius={0.12} isHit={isHit}>
+          <QuantumFingerSegment
+            length={0.50}
+            radiusBase={0.12}
+            radiusTip={0.10}
+            isHit={isHit}
+            glowColor={glowColor}
+          >
             <group ref={pinkyPIP}>
-              <FingerSegment length={0.38} radius={0.11} isHit={isHit}>
+              <QuantumFingerSegment
+                length={0.38}
+                radiusBase={0.10}
+                radiusTip={0.085}
+                isHit={isHit}
+                glowColor={glowColor}
+              >
                 <group ref={pinkyDIP}>
-                  <FingerSegment length={0.32} radius={0.095} isHit={isHit}>
-                    {/* Fingertip Sensor Dome */}
-                    <mesh position={[0, 0.32, 0]}>
-                      <sphereGeometry args={[0.09, 12, 12]} />
-                      <meshBasicMaterial color={isHit ? '#ffb46b' : '#35c3ff'} />
-                    </mesh>
-                  </FingerSegment>
+                  <QuantumFingerSegment
+                    length={0.30}
+                    radiusBase={0.085}
+                    radiusTip={0.072}
+                    isHit={isHit}
+                    glowColor={glowColor}
+                  >
+                    {/* Fingertip Sensor Particle Node */}
+                    <points geometry={tipDomeGeo} position={[0, 0.30, 0]}>
+                      <pointsMaterial
+                        size={0.048}
+                        color={particleColor}
+                        transparent={true}
+                        opacity={0.95}
+                        blending={THREE.AdditiveBlending}
+                        depthWrite={false}
+                      />
+                    </points>
+                  </QuantumFingerSegment>
                 </group>
-              </FingerSegment>
+              </QuantumFingerSegment>
             </group>
-          </FingerSegment>
+          </QuantumFingerSegment>
         </group>
       </group>
     </group>
@@ -336,36 +539,49 @@ const HandModel: React.FC<HandModelProps> = ({ side }) => {
 // Main Exported Canvas Wrapper Component
 export interface Hand3DProps {
   side?: 'rh' | 'lh';
+  viewMode?: 'rh' | 'lh' | 'both';
 }
 
-export const Hand3D: React.FC<Hand3DProps> = ({ side = 'rh' }) => {
+export const Hand3D: React.FC<Hand3DProps> = ({ side, viewMode }) => {
+  const storeViewMode = useGloveStore((s) => s.viewMode);
+  const activeViewMode = viewMode || storeViewMode || side || 'both';
+
+  const isBoth = activeViewMode === 'both';
+  const cameraPos: [number, number, number] = isBoth ? [0, 1.3, 6.2] : [0, 1.2, 5.2];
+
   return (
-    <div className="relative w-full h-full min-h-[440px] flex items-center justify-center bg-gradient-to-b from-[#15171c] via-[#121418] to-[#0c0d10] overflow-hidden rounded-2xl border border-cyber-border">
+    <div className="relative w-full h-full min-h-[440px] flex items-center justify-center bg-[#07090d] overflow-hidden rounded-2xl border border-cyber-border/80 shadow-2xl">
       {/* 3D Canvas */}
       <Canvas
-        camera={{ position: [0, 1.2, 5.2], fov: 45 }}
+        camera={{ position: cameraPos, fov: 45 }}
         className="w-full h-full cursor-grab active:cursor-grabbing"
       >
-        {/* Lights */}
-        <ambientLight intensity={0.7} />
-        <directionalLight position={[6, 8, 5]} intensity={1.4} color="#eef6ff" />
-        <directionalLight position={[-6, -4, -4]} intensity={0.8} color="#35c3ff" />
-        <pointLight position={[0, 0, 3]} intensity={0.6} color="#7af0c4" distance={8} />
+        {/* Holographic Quantum Cyberspace Lighting */}
+        <ambientLight intensity={0.6} />
+        <pointLight position={[0, 0, 5]} intensity={1.2} color="#00f0ff" distance={12} />
+        <pointLight position={[-4, 4, 3]} intensity={0.9} color="#00ffaa" distance={10} />
 
-        {/* The 3D Hand Model */}
-        <HandModel side={side} />
+        {/* The Holographic Quantum Particle Hand Model(s) - GLOVETONE v1.0 Style */}
+        {activeViewMode === 'both' ? (
+          <>
+            <HandModel side="lh" position={[-1.75, -0.6, 0]} />
+            <HandModel side="rh" position={[1.75, -0.6, 0]} />
+          </>
+        ) : (
+          <HandModel side={activeViewMode === 'lh' ? 'lh' : 'rh'} position={[0, -0.6, 0]} />
+        )}
 
         {/* Cyberpunk Grid Floor */}
         <Grid
-          position={[0, -2.4, 0]}
-          args={[14, 14]}
+          position={[0, -2.8, 0]}
+          args={[20, 20]}
           cellSize={0.5}
-          cellThickness={0.8}
-          cellColor="#252a36"
+          cellThickness={0.9}
+          cellColor="#121824"
           sectionSize={2.0}
-          sectionThickness={1.2}
-          sectionColor="#35c3ff"
-          fadeDistance={10}
+          sectionThickness={1.4}
+          sectionColor="#00f0ff"
+          fadeDistance={14}
           fadeStrength={1.5}
         />
 
@@ -381,7 +597,7 @@ export const Hand3D: React.FC<Hand3DProps> = ({ side = 'rh' }) => {
       </Canvas>
 
       {/* Orbit Controls Instruction Badge */}
-      <div className="absolute bottom-3 left-4 text-[11px] font-mono text-cyber-textMuted/70 bg-[#15171c]/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-cyber-border pointer-events-none">
+      <div className="absolute bottom-3 left-4 text-[11px] font-mono text-cyber-textMuted/70 bg-[#07090d]/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-cyber-border/60 pointer-events-none">
         DRAG: Rotate • SCROLL: Zoom • RIGHT-CLICK: Pan
       </div>
     </div>

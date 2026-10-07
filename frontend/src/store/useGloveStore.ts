@@ -24,6 +24,8 @@ const defaultGloveState = (): GloveState => ({
 interface GloveStore {
   wsConnected: boolean;
   activeSide: 'rh' | 'lh';
+  viewMode: 'rh' | 'lh' | 'both';
+  handStyle: 'triangulated' | 'hybrid' | 'particles' | 'wireframe' | 'solid';
   rh: GloveState;
   lh: GloveState;
   settings: GloveSettings;
@@ -38,6 +40,8 @@ interface GloveStore {
   connectWebSocket: () => void;
   send: (msg: any) => void;
   setActiveSide: (side: 'rh' | 'lh') => void;
+  setViewMode: (mode: 'rh' | 'lh' | 'both') => void;
+  setHandStyle: (style: 'triangulated' | 'hybrid' | 'particles' | 'wireframe' | 'solid') => void;
   updateSetting: (key: keyof GloveSettings, value: number) => void;
   triggerTestNote: (note: number) => void;
   connectGlove: (side: 'rh' | 'lh', mode: string, port: string | number) => void;
@@ -57,6 +61,8 @@ const padFlashTimers: Record<number, any> = {};
 export const useGloveStore = create<GloveStore>((set, get) => ({
   wsConnected: false,
   activeSide: 'rh',
+  viewMode: 'both',
+  handStyle: 'particles',
   rh: defaultGloveState(),
   lh: defaultGloveState(),
   settings: {
@@ -286,6 +292,8 @@ export const useGloveStore = create<GloveStore>((set, get) => ({
   },
 
   setActiveSide: (side: 'rh' | 'lh') => set({ activeSide: side }),
+  setViewMode: (mode: 'rh' | 'lh' | 'both') => set({ viewMode: mode }),
+  setHandStyle: (style: 'triangulated' | 'hybrid' | 'particles' | 'wireframe' | 'solid') => set({ handStyle: style }),
 
   updateSetting: (key: keyof GloveSettings, value: number) => {
     set((state) => ({
