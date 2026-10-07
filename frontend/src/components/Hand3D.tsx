@@ -69,6 +69,59 @@ const createHumanPalmParticleGeometry = (width: number, height: number, depth: n
   return geo;
 };
 
+// Helper to generate particle positions for an anatomical distal segment with a curved, natural fingertip
+const createAnatomicalFingertipParticleGeometry = (
+  radiusTop: number,
+  radiusBottom: number,
+  length: number,
+  count: number = 320
+) => {
+  const positions = new Float32Array(count * 3);
+
+  // Distribute particles: ~65% along the tapering phalanx shaft, ~35% in the curved fingertip dome
+  const shaftCount = Math.floor(count * 0.65);
+  const domeCount = count - shaftCount;
+  const domeHeight = radiusTop * 0.92;
+
+  // 1. Phalanx shaft tapering naturally from radiusBottom to radiusTop
+  for (let i = 0; i < shaftCount; i++) {
+    const yRatio = Math.random(); // 0 at joint, 1 at base of fingertip curve
+    const currentRadius = radiusBottom + (radiusTop - radiusBottom) * yRatio;
+    const u = Math.random();
+    const r = currentRadius * Math.sqrt(u);
+    const theta = Math.random() * Math.PI * 2;
+    const y = yRatio * length;
+    const x = r * Math.cos(theta);
+    const z = r * Math.sin(theta) * 0.92; // Natural slightly oval finger cross-section
+
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+  }
+
+  // 2. Smooth anatomical curved fingertip dome (capping the tip smoothly to an organic rounded apex)
+  for (let i = 0; i < domeCount; i++) {
+    // phi: polar angle from apex (0 = apex of tip, PI/2 = base of dome at y = length)
+    const phi = Math.asin(Math.random());
+    const theta = Math.random() * Math.PI * 2;
+    // Scale factor s fills both inner volume and defines outer contour
+    const s = 0.35 + 0.65 * Math.sqrt(Math.random());
+
+    const x = s * radiusTop * Math.sin(phi) * Math.cos(theta);
+    const z = s * (radiusTop * 0.90) * Math.sin(phi) * Math.sin(theta);
+    const y = length + s * domeHeight * Math.cos(phi);
+
+    const idx = shaftCount + i;
+    positions[idx * 3] = x;
+    positions[idx * 3 + 1] = y;
+    positions[idx * 3 + 2] = z;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  return geo;
+};
+
 // Anatomical Human Finger Segment Component (Pure Holographic Quantum Particles)
 interface QuantumFingerSegmentProps {
   length: number;
@@ -76,6 +129,7 @@ interface QuantumFingerSegmentProps {
   radiusTip: number;
   isHit: boolean;
   glowColor?: string;
+  isTip?: boolean;
   children?: React.ReactNode;
 }
 
@@ -85,11 +139,15 @@ const QuantumFingerSegment: React.FC<QuantumFingerSegmentProps> = ({
   radiusTip,
   isHit,
   glowColor = '#00f0ff',
+  isTip = false,
   children,
 }) => {
   const particleGeo = useMemo(
-    () => createTaperedCylinderParticleGeometry(radiusTip * 1.15, radiusBase * 1.15, length, 260),
-    [radiusBase, radiusTip, length]
+    () =>
+      isTip
+        ? createAnatomicalFingertipParticleGeometry(radiusTip * 1.15, radiusBase * 1.15, length, 320)
+        : createTaperedCylinderParticleGeometry(radiusTip * 1.15, radiusBase * 1.15, length, 260),
+    [radiusBase, radiusTip, length, isTip]
   );
   const knuckleParticleGeo = useMemo(
     () => createEllipsoidParticleGeometry(radiusBase * 1.3, radiusBase * 1.3, radiusBase * 1.3, 110),
@@ -125,7 +183,7 @@ const QuantumFingerSegment: React.FC<QuantumFingerSegmentProps> = ({
       </points>
 
       {/* Child joint container placed at the tip of this segment */}
-      <group position={[0, length, 0]}>{children}</group>
+      {children && <group position={[0, length, 0]}>{children}</group>}
     </group>
   );
 };
@@ -151,7 +209,6 @@ const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) 
   const thenarParticleGeo = useMemo(() => createEllipsoidParticleGeometry(0.40, 0.58, 0.35, 480), []);
   const hypothenarParticleGeo = useMemo(() => createEllipsoidParticleGeometry(0.34, 0.50, 0.30, 360), []);
   const cuffParticleGeo = useMemo(() => createTaperedCylinderParticleGeometry(0.85, 0.72, 2.0, 650), []);
-  const tipDomeGeo = useMemo(() => createEllipsoidParticleGeometry(0.12, 0.12, 0.12, 60), []);
 
   const handGroup = useRef<THREE.Group>(null);
 
@@ -335,19 +392,8 @@ const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) 
                 radiusTip={0.10}
                 isHit={isHit}
                 glowColor={glowColor}
-              >
-                {/* Thumb tip particle node */}
-                <points geometry={tipDomeGeo} position={[0, 0.42, 0]}>
-                  <pointsMaterial
-                    size={0.048}
-                    color={particleColor}
-                    transparent={true}
-                    opacity={0.95}
-                    blending={THREE.AdditiveBlending}
-                    depthWrite={false}
-                  />
-                </points>
-              </QuantumFingerSegment>
+                isTip={true}
+              />
             </group>
           </QuantumFingerSegment>
         </group>
@@ -378,19 +424,8 @@ const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) 
                     radiusTip={0.085}
                     isHit={isHit}
                     glowColor={glowColor}
-                  >
-                    {/* Fingertip Sensor Particle Node */}
-                    <points geometry={tipDomeGeo} position={[0, 0.36, 0]}>
-                      <pointsMaterial
-                        size={0.048}
-                        color={particleColor}
-                        transparent={true}
-                        opacity={0.95}
-                        blending={THREE.AdditiveBlending}
-                        depthWrite={false}
-                      />
-                    </points>
-                  </QuantumFingerSegment>
+                    isTip={true}
+                  />
                 </group>
               </QuantumFingerSegment>
             </group>
@@ -423,19 +458,8 @@ const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) 
                     radiusTip={0.09}
                     isHit={isHit}
                     glowColor={glowColor}
-                  >
-                    {/* Fingertip Sensor Particle Node */}
-                    <points geometry={tipDomeGeo} position={[0, 0.38, 0]}>
-                      <pointsMaterial
-                        size={0.048}
-                        color={particleColor}
-                        transparent={true}
-                        opacity={0.95}
-                        blending={THREE.AdditiveBlending}
-                        depthWrite={false}
-                      />
-                    </points>
-                  </QuantumFingerSegment>
+                    isTip={true}
+                  />
                 </group>
               </QuantumFingerSegment>
             </group>
@@ -468,19 +492,8 @@ const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) 
                     radiusTip={0.085}
                     isHit={isHit}
                     glowColor={glowColor}
-                  >
-                    {/* Fingertip Sensor Particle Node */}
-                    <points geometry={tipDomeGeo} position={[0, 0.36, 0]}>
-                      <pointsMaterial
-                        size={0.048}
-                        color={particleColor}
-                        transparent={true}
-                        opacity={0.95}
-                        blending={THREE.AdditiveBlending}
-                        depthWrite={false}
-                      />
-                    </points>
-                  </QuantumFingerSegment>
+                    isTip={true}
+                  />
                 </group>
               </QuantumFingerSegment>
             </group>
@@ -513,19 +526,8 @@ const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0] }) 
                     radiusTip={0.072}
                     isHit={isHit}
                     glowColor={glowColor}
-                  >
-                    {/* Fingertip Sensor Particle Node */}
-                    <points geometry={tipDomeGeo} position={[0, 0.30, 0]}>
-                      <pointsMaterial
-                        size={0.048}
-                        color={particleColor}
-                        transparent={true}
-                        opacity={0.95}
-                        blending={THREE.AdditiveBlending}
-                        depthWrite={false}
-                      />
-                    </points>
-                  </QuantumFingerSegment>
+                    isTip={true}
+                  />
                 </group>
               </QuantumFingerSegment>
             </group>
