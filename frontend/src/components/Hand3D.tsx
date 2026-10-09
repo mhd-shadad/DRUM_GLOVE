@@ -837,13 +837,13 @@ const FingerSegment: React.FC<FingerSegmentProps> = ({
 const QuantumFingerSegment = FingerSegment;
 
 // 3D Procedural Anatomical Quantum Particle Nebula Hand Model Component
-interface HandModelProps {
+export interface HandModelProps {
   side: 'rh' | 'lh';
   position?: [number, number, number];
   handStyle?: HandStyleType;
 }
 
-const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0], handStyle: propStyle }) => {
+export const HandModel: React.FC<HandModelProps> = ({ side, position = [0, -0.6, 0], handStyle: propStyle }) => {
   const isHandFlashing = useGloveStore((s) => s.isHandFlashing);
   const lastHit = useGloveStore((s) => s.lastHit);
   const isHit = isHandFlashing && (!lastHit?.side || lastHit.side === side);

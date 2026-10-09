@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { GloveState, GloveSettings, DrumHit, PortInfo, MidiState, InboundMessage } from '../types';
+import { playDrumSound } from '../utils/drumAudio';
 
 const defaultGloveState = (): GloveState => ({
   connected: false,
@@ -22,12 +23,19 @@ const defaultGloveState = (): GloveState => ({
 });
 
 export type HandStyleType = 'particles' | 'anatomical' | 'hybrid' | 'wireframe' | 'triangulated' | 'solid';
+export type VisualizerModeType = 'hand' | 'drum' | 'dual';
+export type DrumMeshStyleType = 'particle_top' | 'particles' | 'wireframe' | 'holographic' | 'solid' | 'matrix';
+export type DrumCameraViewType = 'isometric' | 'drummer' | 'audience' | 'top';
 
 interface GloveStore {
   wsConnected: boolean;
   activeSide: 'rh' | 'lh';
   viewMode: 'rh' | 'lh' | 'both';
   handStyle: HandStyleType;
+  visualizerMode: VisualizerModeType;
+  drumMeshStyle: DrumMeshStyleType;
+  drumCameraView: DrumCameraViewType;
+  soundEnabled: boolean;
   rh: GloveState;
   lh: GloveState;
   settings: GloveSettings;
@@ -43,9 +51,13 @@ interface GloveStore {
   send: (msg: any) => void;
   setActiveSide: (side: 'rh' | 'lh') => void;
   setViewMode: (mode: 'rh' | 'lh' | 'both') => void;
-  setHandStyle: (style: 'triangulated' | 'hybrid' | 'particles' | 'wireframe' | 'solid' | 'anatomical') => void;
+  setHandStyle: (style: HandStyleType) => void;
+  setVisualizerMode: (mode: VisualizerModeType) => void;
+  setDrumMeshStyle: (style: DrumMeshStyleType) => void;
+  setDrumCameraView: (view: DrumCameraViewType) => void;
+  setSoundEnabled: (enabled: boolean) => void;
   updateSetting: (key: keyof GloveSettings, value: number) => void;
-  triggerTestNote: (note: number) => void;
+  triggerTestNote: (note: number, velocity?: number) => void;
   connectGlove: (side: 'rh' | 'lh', mode: string, port: string | number) => void;
   disconnectGlove: (side: 'rh' | 'lh') => void;
   calibrate: (side: 'rh' | 'lh') => void;
@@ -65,6 +77,10 @@ export const useGloveStore = create<GloveStore>((set, get) => ({
   activeSide: 'rh',
   viewMode: 'both',
   handStyle: 'wireframe',
+  visualizerMode: 'drum',
+  drumMeshStyle: 'particle_top',
+  drumCameraView: 'top',
+  soundEnabled: true,
   rh: defaultGloveState(),
   lh: defaultGloveState(),
   settings: {
@@ -165,6 +181,11 @@ export const useGloveStore = create<GloveStore>((set, get) => ({
               handFlashTimer = setTimeout(() => {
                 set({ isHandFlashing: false });
               }, 150);
+
+              // Play synthesized drum sound if enabled
+              if (get().soundEnabled && hit.note) {
+                playDrumSound(hit.note, hit.velocity);
+              }
 
               // Flash corresponding drum pad for 150ms
               if (hit.note) {
@@ -296,6 +317,10 @@ export const useGloveStore = create<GloveStore>((set, get) => ({
   setActiveSide: (side: 'rh' | 'lh') => set({ activeSide: side }),
   setViewMode: (mode: 'rh' | 'lh' | 'both') => set({ viewMode: mode }),
   setHandStyle: (style: HandStyleType) => set({ handStyle: style }),
+  setVisualizerMode: (mode: VisualizerModeType) => set({ visualizerMode: mode }),
+  setDrumMeshStyle: (style: DrumMeshStyleType) => set({ drumMeshStyle: style }),
+  setDrumCameraView: (view: DrumCameraViewType) => set({ drumCameraView: view }),
+  setSoundEnabled: (enabled: boolean) => set({ soundEnabled: enabled }),
 
   updateSetting: (key: keyof GloveSettings, value: number) => {
     set((state) => ({
@@ -307,10 +332,31 @@ export const useGloveStore = create<GloveStore>((set, get) => ({
     });
   },
 
-  triggerTestNote: (note: number) => {
+  triggerTestNote: (note: number, velocity: number = 100) => {
+    if (get().soundEnabled) {
+      playDrumSound(note, velocity);
+    }
+    // Also trigger local pad flash
+    if (padFlashTimers[note]) clearTimeout(padFlashTimers[note]);
+    set((state) => ({
+      activePads: { ...state.activePads, [note]: true },
+      lastHit: {
+        side: state.activeSide,
+        name: `NOTE #${note}`,
+        note,
+        velocity,
+        timestamp: Date.now(),
+      }
+    }));
+    padFlashTimers[note] = setTimeout(() => {
+      set((state) => ({
+        activePads: { ...state.activePads, [note]: false }
+      }));
+    }, 150);
+
     get().send({
       type: 'trigger_test_note',
-      payload: { note }
+      payload: { note, velocity }
     });
   },
 
