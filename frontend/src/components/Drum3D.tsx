@@ -485,30 +485,55 @@ const TopDownParticlePad: React.FC<TopDownPadProps> = ({
   );
 };
 
+// Helper to check if any flex sensor assigned to a note is currently active
+const isFlexSensorActiveForNote = (
+  note: number,
+  rh: any,
+  lh: any,
+  settings: any,
+  flexMappings: Record<string, number>
+) => {
+  const isRhF1 = rh.f1 > settings.flex1_threshold || (rh.bend?.f1 ?? 0) > 15;
+  const isRhF2 = rh.f2 > settings.flex2_threshold || (rh.bend?.f2 ?? 0) > 15;
+  const isRhF3 = rh.f3 > settings.flex3_threshold || (rh.bend?.f3 ?? 0) > 15;
+  const isRhF4 = rh.f4 > settings.flex4_threshold || (rh.bend?.f4 ?? 0) > 15;
+
+  if (flexMappings?.rh_f1 === note && isRhF1) return true;
+  if (flexMappings?.rh_f2 === note && isRhF2) return true;
+  if (flexMappings?.rh_f3 === note && isRhF3) return true;
+  if (flexMappings?.rh_f4 === note && isRhF4) return true;
+
+  if (lh?.connected) {
+    const isLhF1 = lh.f1 > settings.flex1_threshold || (lh.bend?.f1 ?? 0) > 15;
+    const isLhF2 = lh.f2 > settings.flex2_threshold || (lh.bend?.f2 ?? 0) > 15;
+    const isLhF3 = lh.f3 > settings.flex3_threshold || (lh.bend?.f3 ?? 0) > 15;
+    const isLhF4 = lh.f4 > settings.flex4_threshold || (lh.bend?.f4 ?? 0) > 15;
+
+    if (flexMappings?.lh_f1 === note && isLhF1) return true;
+    if (flexMappings?.lh_f2 === note && isLhF2) return true;
+    if (flexMappings?.lh_f3 === note && isLhF3) return true;
+    if (flexMappings?.lh_f4 === note && isLhF4) return true;
+  }
+
+  return false;
+};
+
 // =========================================================================
 // TOP-DOWN SEPARATED VIBRANT PARTICLE DRUMS SCENE (Curved Single Line)
 // Drums arranged in a single horizontal curved arc with clear spacing
 // =========================================================================
 const TopDownParticleDrumsScene: React.FC = () => {
-  const { lastHit, activePads, triggerTestNote, rh, lh, settings } = useGloveStore();
+  const { lastHit, activePads, triggerTestNote, rh, lh, settings, flexMappings } = useGloveStore();
 
   const handleHit = (note: number) => {
     triggerTestNote(note);
     playDrumSound(note);
   };
 
-  // Flex Sensor Bend Highlights
-  const isF1Active = rh.f1 > settings.flex1_threshold || lh.f1 > settings.flex1_threshold || (rh.bend?.f1 > 15);
-  const isF2Active = rh.f2 > settings.flex2_threshold || lh.f2 > settings.flex2_threshold || (rh.bend?.f2 > 15);
-  const isF3Active = rh.f3 > settings.flex3_threshold || lh.f3 > settings.flex3_threshold || (rh.bend?.f3 > 15);
-  const isOpenHatActive =
-    (lh.connected && lh.f1 > settings.flex1_threshold) ||
-    (rh.bend?.f4 > 20) ||
-    (lh.bend?.f1 > 15) ||
-    (rh.f4 > settings.flex4_threshold);
-
-  const isRecentHit = (note: number) =>
-    !!activePads[note] || (lastHit?.note === note && Date.now() - lastHit.timestamp < 180);
+  const isDrumHighlighted = (note: number) => {
+    const isRecent = !!activePads[note] || (lastHit?.note === note && Date.now() - lastHit.timestamp < 180);
+    return isRecent || isFlexSensorActiveForNote(note, rh, lh, settings, flexMappings);
+  };
 
   // Subtle curved guide spline line points
   const curvePoints = useMemo(() => {
@@ -543,7 +568,7 @@ const TopDownParticleDrumsScene: React.FC = () => {
         position={[-2.65, 0, 0.28]}
         radius={0.68}
         colors={TOP_DOWN_DRUM_COLORS.closed_hihat}
-        isHit={isRecentHit(42) || isF3Active}
+        isHit={isDrumHighlighted(42)}
         onHit={() => handleHit(42)}
       />
 
@@ -552,7 +577,7 @@ const TopDownParticleDrumsScene: React.FC = () => {
         position={[-0.90, 0, -0.15]}
         radius={0.74}
         colors={TOP_DOWN_DRUM_COLORS.snare}
-        isHit={isRecentHit(38) || isRecentHit(39) || isF2Active}
+        isHit={isDrumHighlighted(38) || isDrumHighlighted(39)}
         onHit={() => handleHit(38)}
       />
 
@@ -561,7 +586,7 @@ const TopDownParticleDrumsScene: React.FC = () => {
         position={[0.90, 0, -0.15]}
         radius={0.80}
         colors={TOP_DOWN_DRUM_COLORS.kick}
-        isHit={isRecentHit(36) || isF1Active}
+        isHit={isDrumHighlighted(36)}
         onHit={() => handleHit(36)}
       />
 
@@ -570,7 +595,7 @@ const TopDownParticleDrumsScene: React.FC = () => {
         position={[2.65, 0, 0.28]}
         radius={0.72}
         colors={TOP_DOWN_DRUM_COLORS.open_hihat}
-        isHit={isRecentHit(46) || isOpenHatActive}
+        isHit={isDrumHighlighted(46)}
         onHit={() => handleHit(46)}
       />
     </group>
@@ -1000,7 +1025,7 @@ const HardwareTripod: React.FC<{
 // 3D STUDIO DRUM SET SCENE (4-Piece Kit)
 // =========================================================================
 const Studio4DrumKitScene: React.FC<{ drumMeshStyle: DrumMeshStyleType }> = ({ drumMeshStyle }) => {
-  const { lastHit, activePads, triggerTestNote, rh, lh, settings } = useGloveStore();
+  const { lastHit, activePads, triggerTestNote, rh, lh, settings, flexMappings } = useGloveStore();
   const theme = THEME_COLORS[drumMeshStyle] || THEME_COLORS.particles;
 
   const handleHit = (note: number) => {
@@ -1008,24 +1033,17 @@ const Studio4DrumKitScene: React.FC<{ drumMeshStyle: DrumMeshStyleType }> = ({ d
     playDrumSound(note);
   };
 
-  const isF1Active = rh.f1 > settings.flex1_threshold || lh.f1 > settings.flex1_threshold || (rh.bend?.f1 > 15);
-  const isF2Active = rh.f2 > settings.flex2_threshold || lh.f2 > settings.flex2_threshold || (rh.bend?.f2 > 15);
-  const isF3Active = rh.f3 > settings.flex3_threshold || lh.f3 > settings.flex3_threshold || (rh.bend?.f3 > 15);
-  const isOpenHatActive =
-    (lh.connected && lh.f1 > settings.flex1_threshold) ||
-    (rh.bend?.f4 > 20) ||
-    (lh.bend?.f1 > 15) ||
-    (rh.f4 > settings.flex4_threshold);
-
-  const isRecentHit = (note: number) =>
-    !!activePads[note] || (lastHit?.note === note && Date.now() - lastHit.timestamp < 180);
+  const isDrumHighlighted = (note: number) => {
+    const isRecent = !!activePads[note] || (lastHit?.note === note && Date.now() - lastHit.timestamp < 180);
+    return isRecent || isFlexSensorActiveForNote(note, rh, lh, settings, flexMappings);
+  };
 
   return (
     <group position={[0, -0.15, 0]}>
       {/* 1. Kick Drum */}
       <KickDrum
         position={[0, 0.1, 0.2]}
-        isHit={isRecentHit(36) || isF1Active}
+        isHit={isDrumHighlighted(36)}
         style={drumMeshStyle}
         colorTheme={theme}
         onHit={() => handleHit(36)}
@@ -1055,7 +1073,7 @@ const Studio4DrumKitScene: React.FC<{ drumMeshStyle: DrumMeshStyleType }> = ({ d
             radius={0.66}
             position={[0, 0.22, 0]}
             rotation={[-Math.PI / 2, 0, 0]}
-            isHit={isRecentHit(38) || isRecentHit(39) || isF2Active}
+            isHit={isDrumHighlighted(38) || isDrumHighlighted(39)}
             style={drumMeshStyle}
             colorTheme={theme}
             onHit={() => handleHit(38)}
@@ -1083,7 +1101,7 @@ const Studio4DrumKitScene: React.FC<{ drumMeshStyle: DrumMeshStyleType }> = ({ d
           radius={0.62}
           position={[0, 0, 0]}
           tilt={[0.06, 0, 0]}
-          isHit={isRecentHit(42) || isF3Active}
+          isHit={isDrumHighlighted(42)}
           style={drumMeshStyle}
           colorTheme={theme}
           onHit={() => handleHit(42)}
@@ -1098,7 +1116,7 @@ const Studio4DrumKitScene: React.FC<{ drumMeshStyle: DrumMeshStyleType }> = ({ d
           radius={0.66}
           position={[0, 0, 0]}
           tilt={[0.18, -0.08, 0.05]}
-          isHit={isRecentHit(46) || isOpenHatActive}
+          isHit={isDrumHighlighted(46)}
           style={drumMeshStyle}
           colorTheme={theme}
           onHit={() => handleHit(46)}

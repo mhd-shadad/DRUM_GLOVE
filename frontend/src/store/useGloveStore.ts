@@ -27,6 +27,38 @@ export type VisualizerModeType = 'hand' | 'drum' | 'dual';
 export type DrumMeshStyleType = 'particle_top' | 'particles' | 'wireframe' | 'holographic' | 'solid' | 'matrix';
 export type DrumCameraViewType = 'isometric' | 'drummer' | 'audience' | 'top';
 
+export type FlexSensorId = 'rh_f1' | 'rh_f2' | 'rh_f3' | 'rh_f4' | 'lh_f1' | 'lh_f2' | 'lh_f3' | 'lh_f4';
+
+export interface FlexSensorConfig {
+  id: FlexSensorId;
+  label: string;
+  finger: string;
+  side: 'rh' | 'lh';
+  color: string;
+}
+
+export const FLEX_SENSORS_DEF: FlexSensorConfig[] = [
+  { id: 'rh_f1', label: 'RH F1', finger: 'Index', side: 'rh', color: '#ff5500' },
+  { id: 'rh_f2', label: 'RH F2', finger: 'Middle', side: 'rh', color: '#00f0ff' },
+  { id: 'rh_f3', label: 'RH F3', finger: 'Ring', side: 'rh', color: '#00ff88' },
+  { id: 'rh_f4', label: 'RH F4', finger: 'Pinky', side: 'rh', color: '#ff007f' },
+  { id: 'lh_f1', label: 'LH F1', finger: 'Index', side: 'lh', color: '#ff007f' },
+  { id: 'lh_f2', label: 'LH F2', finger: 'Middle', side: 'lh', color: '#38bdf8' },
+  { id: 'lh_f3', label: 'LH F3', finger: 'Ring', side: 'lh', color: '#a855f7' },
+  { id: 'lh_f4', label: 'LH F4', finger: 'Pinky', side: 'lh', color: '#eab308' },
+];
+
+export const DEFAULT_FLEX_MAPPINGS: Record<FlexSensorId, number> = {
+  rh_f1: 36, // Kick
+  rh_f2: 38, // Snare
+  rh_f3: 42, // Closed Hi-Hat
+  rh_f4: 46, // Open Hi-Hat
+  lh_f1: 46, // Open Hi-Hat
+  lh_f2: 51, // Ride
+  lh_f3: 52, // China
+  lh_f4: 49, // Crash
+};
+
 interface GloveStore {
   wsConnected: boolean;
   activeSide: 'rh' | 'lh';
@@ -46,6 +78,10 @@ interface GloveStore {
   isHandFlashing: boolean;
   logs: string[];
 
+  // Flex Mapping State
+  flexMappings: Record<FlexSensorId, number>;
+  selectedFlexForMapping: FlexSensorId | null;
+
   // Actions
   connectWebSocket: () => void;
   send: (msg: any) => void;
@@ -56,6 +92,9 @@ interface GloveStore {
   setDrumMeshStyle: (style: DrumMeshStyleType) => void;
   setDrumCameraView: (view: DrumCameraViewType) => void;
   setSoundEnabled: (enabled: boolean) => void;
+  setFlexMapping: (sensorId: FlexSensorId, note: number) => void;
+  setSelectedFlexForMapping: (sensorId: FlexSensorId | null) => void;
+  resetFlexMappings: () => void;
   updateSetting: (key: keyof GloveSettings, value: number) => void;
   triggerTestNote: (note: number, velocity?: number) => void;
   connectGlove: (side: 'rh' | 'lh', mode: string, port: string | number) => void;
@@ -83,6 +122,8 @@ export const useGloveStore = create<GloveStore>((set, get) => ({
   soundEnabled: true,
   rh: defaultGloveState(),
   lh: defaultGloveState(),
+  flexMappings: { ...DEFAULT_FLEX_MAPPINGS },
+  selectedFlexForMapping: null,
   settings: {
     flex1_threshold: 20,
     flex2_threshold: 20,
@@ -321,6 +362,38 @@ export const useGloveStore = create<GloveStore>((set, get) => ({
   setDrumMeshStyle: (style: DrumMeshStyleType) => set({ drumMeshStyle: style }),
   setDrumCameraView: (view: DrumCameraViewType) => set({ drumCameraView: view }),
   setSoundEnabled: (enabled: boolean) => set({ soundEnabled: enabled }),
+
+  setFlexMapping: (sensorId: FlexSensorId, note: number) => {
+    set((state) => {
+      const updated = { ...state.flexMappings, [sensorId]: note };
+      const timeStr = new Date().toLocaleTimeString();
+      return {
+        flexMappings: updated,
+        selectedFlexForMapping: null,
+        logs: [`[${timeStr}] Mapped ${sensorId.toUpperCase()} -> MIDI #${note}`, ...state.logs.slice(0, 199)],
+      };
+    });
+    get().send({
+      type: 'update_flex_mapping',
+      payload: { sensor_id: sensorId, note },
+    });
+  },
+
+  setSelectedFlexForMapping: (sensorId: FlexSensorId | null) => {
+    set({ selectedFlexForMapping: sensorId });
+  },
+
+  resetFlexMappings: () => {
+    set((state) => ({
+      flexMappings: { ...DEFAULT_FLEX_MAPPINGS },
+      selectedFlexForMapping: null,
+      logs: [`[${new Date().toLocaleTimeString()}] Reset flex mappings to factory defaults`, ...state.logs.slice(0, 199)],
+    }));
+    get().send({
+      type: 'reset_flex_mappings',
+      payload: DEFAULT_FLEX_MAPPINGS,
+    });
+  },
 
   updateSetting: (key: keyof GloveSettings, value: number) => {
     set((state) => ({

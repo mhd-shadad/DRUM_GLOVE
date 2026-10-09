@@ -199,6 +199,36 @@ def _process_command_on_qt_thread(cmd: dict):
             queue_broadcast({"type": "settings_update", "payload": settings})
             queue_broadcast({"type": "log", "payload": {"text": f"Setting updated: {key} = {settings[key]}"}})
 
+    elif msg_type == "update_flex_mapping":
+        sensor_id = str(payload.get("sensor_id", ""))
+        note = int(payload.get("note", 36))
+        # Update matching worker rule if available
+        if sensor_id.startswith("rh_"):
+            try:
+                finger_num = int(sensor_id.replace("rh_f", ""))
+                for rname, rule in rh_worker.engine.rules.items():
+                    if rule.get("fingers") == [finger_num]:
+                        rule["midi_note"] = note
+            except Exception:
+                pass
+        elif sensor_id.startswith("lh_"):
+            try:
+                finger_num = int(sensor_id.replace("lh_f", ""))
+                for rname, rule in lh_worker.engine.rules.items():
+                    if rule.get("fingers") == [finger_num]:
+                        rule["midi_note"] = note
+            except Exception:
+                pass
+        queue_broadcast({"type": "log", "payload": {"text": f"Flex mapping updated: {sensor_id.upper()} -> MIDI #{note}"}})
+
+    elif msg_type == "reset_flex_mappings":
+        # Reload default mappings
+        rh_worker.mapping = load_mapping(os.path.join(BASE_DIR, "config", "drum_mapping_rh.json"))
+        rh_worker.engine.rules = rh_worker.mapping
+        lh_worker.mapping = load_mapping(os.path.join(BASE_DIR, "config", "drum_mapping_lh.json"))
+        lh_worker.engine.rules = lh_worker.mapping
+        queue_broadcast({"type": "log", "payload": {"text": "Flex sensor mappings reset to factory defaults"}})
+
     elif msg_type == "trigger_test_note":
         note = int(payload.get("note", 36))
         vel = int(payload.get("velocity", 100))
